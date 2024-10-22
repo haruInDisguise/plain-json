@@ -1,0 +1,5 @@
+If:
+  PathMatch: json.h
+
+CompileFlags:
+  Add: [-xc, -DJSON_IMPLEMENTATION, -DTEST_DEBUG]

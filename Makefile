@@ -1,0 +1,60 @@
+CC = clang
+LD = clang
+
+CFLAGS += -Itest/libtest/include
+CFLAGS += -Wall -Wpedantic -Wextra -Wno-sign-conversion
+CFLAGS += -std=gnu99 -O0 -gdwarf-5 -fno-omit-frame-pointer -fsanitize=address,undefined
+
+LDFLAGS = -fsanitize=address,undefined
+
+BUILD_DIR = build
+
+DEBUG_BIN = $(BUILD_DIR)/dump_state
+DEBUG_SRC = ./test/dump_state.c
+DEBUG_OBJ := $(patsubst %.c,$(BUILD_DIR)/%.o,$(DEBUG_SRC))
+
+TEST_BIN = $(BUILD_DIR)/run_tests
+TEST_SRC = ./test/test_main.c \
+		   ./test/test_structure.c \
+		   ./test/test_parsing.c \
+		   ./test/test_value_parsing.c
+TEST_OBJ := $(patsubst %.c,$(BUILD_DIR)/%.o,$(TEST_SRC))
+
+DEP := $(patsubst %.c,$(BUILD_DIR)/%.d,$(TEST_SRC) $(DEBUG_SRC))
+
+all: build_tests build_bin
+
+build_bin: $(DEBUG_BIN)
+
+build_tests: $(TEST_BIN)
+
+dev: clean
+	@mkdir -p $(BUILD_DIR)
+	bear --append --output "$(BUILD_DIR)/compile_commands.json" -- $(MAKE)
+
+clean:
+	rm -rf $(BUILD_DIR)
+
+.PHONY: clean dev
+.SUFFIXES:
+
+# ----
+
+$(TEST_BIN): $(DEP) $(TEST_OBJ) json.h
+	$(LD) $(LDFLAGS) $(TEST_OBJ) -o $@
+
+$(DEBUG_BIN): $(DEP) $(DEBUG_OBJ) json.h
+	$(LD) $(LDFLAGS) $(DEBUG_OBJ) -o $@
+
+-include $(DEP)
+
+$(DEP): $(BUILD_DIR)/%.d: %.c
+	@mkdir -p $(dir $@)
+	@$(CC) $(CFLAGS) $< -MM | \
+		sed 's#$(notdir $*)\.o[ :]*#$(BUILD_PATH)/$*.o $(BUILD_PATH)/$*.d: #g' > $@
+
+$(TEST_OBJ) $(DEBUG_OBJ): $(BUILD_DIR)/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) -c $(CFLAGS) $< -o $@
+
+
