@@ -19,7 +19,7 @@ TEST(value_parsing, string_escapes) {
     status = json_read_token(&context, &token);
     test_assert_eq(status, JSON_TRUE);
     test_assert_eq(token.type, JSON_TYPE_STRING);
-    test_assert_string_eq(token.string_buffer, "\\n\\r\\t\\f");
+    test_assert_string_eq(token.value_buffer, "\\n\\r\\t\\f");
 
     status = json_read_token(&context, &token);
     test_assert_eq(status, JSON_TRUE);
@@ -37,7 +37,7 @@ TEST(value_parsing, string_unicode) {
 
     status = json_read_token(&context, &token);
     test_assert_eq(status, JSON_TRUE);
-    test_assert_string_eq(token.string_buffer, "\\uabcd");
+    test_assert_string_eq(token.value_buffer, "\\uabcd");
 
     status = json_read_token(&context, &token);
     test_assert(status == JSON_TRUE);
@@ -97,7 +97,7 @@ TEST(value_parsing_malformed, string_buffer_too_short) {
     const char *text = "[\"ohhh no!\"]";
 
     json_load_buffer(&context, text, strlen(text));
-    token.string_buffer_size = 2;
+    token.value_buffer_size = 2;
 
     json_ErrorType status = json_read_token(&context, &token);
     test_assert_eq(status, JSON_TRUE);
@@ -143,7 +143,7 @@ TEST(value_parsing_malformed, string_unicode_too_short) {
     const char *text = "[\"\\u";
 
     json_load_buffer(&context, text, strlen(text));
-    token.string_buffer_size = 2;
+    token.value_buffer_size = 2;
 
     json_ErrorType status = json_read_token(&context, &token);
     test_assert_eq(status, JSON_TRUE);

@@ -19,7 +19,7 @@ TEST(parsing, single_named_string) {
 
     test_assert_eq(token.type, JSON_TYPE_STRING);
     test_assert_string_eq("test_key", token.key_buffer);
-    test_assert_string_eq("test_value", token.string_buffer);
+    test_assert_string_eq("test_value", token.value_buffer);
 
     status = json_read_token(&context, &token);
     test_assert(status == JSON_TRUE);
@@ -77,17 +77,17 @@ TEST(parsing, array_of_strings) {
     status = json_read_token(&context, &token);
     test_assert_eq(status, JSON_TRUE);
     test_assert_eq(token.type, JSON_TYPE_STRING);
-    test_assert_string_eq("one", token.string_buffer);
+    test_assert_string_eq("one", token.value_buffer);
 
     status = json_read_token(&context, &token);
     test_assert_eq(status, JSON_TRUE);
     test_assert_eq(token.type, JSON_TYPE_STRING);
-    test_assert_string_eq("two", token.string_buffer);
+    test_assert_string_eq("two", token.value_buffer);
 
     status = json_read_token(&context, &token);
     test_assert_eq(status, JSON_TRUE);
     test_assert_eq(token.type, JSON_TYPE_STRING);
-    test_assert_string_eq("three", token.string_buffer);
+    test_assert_string_eq("three", token.value_buffer);
 
     status = json_read_token(&context, &token);
     test_assert(status == JSON_TRUE);

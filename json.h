@@ -5,14 +5,15 @@
     #define JSON_MAX_DEPTH 32
 #endif
 
-#define JSON_STATE_READ_KEY         0x01
-#define JSON_STATE_READ_VALUE       0x02
-#define JSON_STATE_READ_ARRAY_VALUE 0x04
+#define JSON_STATE_IS_ROOT 0x01
 
-#define JSON_STATE_IS_ROOT 0x20
+#define JSON_STATE_NEEDS_KEY             0x02
+#define JSON_STATE_NEEDS_FIELD_SEPERATOR 0x04
+#define JSON_STATE_NEEDS_VALUE           0x08
+#define JSON_STATE_NEEDS_ARRAY_VALUE     0x10
 
-#define JSON_STATE_READ_OBJECT_END 0x40
-#define JSON_STATE_READ_ARRAY_END  0x80
+#define JSON_STATE_NEEDS_OBJECT_END 0x20
+#define JSON_STATE_NEEDS_ARRAY_END  0x40
 
 typedef enum {
     JSON_FALSE = 0,
@@ -22,9 +23,12 @@ typedef enum {
     JSON_ERROR_STRING_INVALID_HEX,
     JSON_ERROR_STRING_UNTERMINATED,
 
+    JSON_ERROR_NUMBER_INVALID,
+
     JSON_ERROR_KEYWORD_INVALID,
 
     JSON_ERROR_NO_MEMORY,
+    JSON_ERROR_MISSING_FIELD_SEPERATOR,
     JSON_ERROR_TOO_DEEP,
     JSON_ERROR_IS_ROOT,
     JSON_ERROR_UNEXPECTED_TOKEN,
@@ -45,26 +49,15 @@ typedef enum {
     JSON_TYPE_ARRAY_END,
 
     JSON_TYPE_STRING,
-    JSON_TYPE_INTEGER,
-    JSON_TYPE_REAL,
+    JSON_TYPE_NUMBER,
 } json_Type;
 
-/* FIXME: Using unsigned long for "address size" values is not platform agnostic... */
-typedef unsigned int json_u32;
-typedef unsigned long json_usize;
-
 typedef struct {
-    union {
-        float real;
-        int boolean;
-        int integer;
-    } value;
-
-    char *string_buffer;
+    char *value_buffer;
     char *key_buffer;
 
     int key_buffer_size;
-    int string_buffer_size;
+    int value_buffer_size;
 
     int line;
     int line_offset;
@@ -76,13 +69,13 @@ typedef struct {
 
 typedef struct {
     const char *buffer;
-    json_Type current_token_type;
 
     unsigned long buffer_size;
     unsigned long buffer_offset;
 
     int depth_buffer_index;
-    unsigned int depth_buffer[JSON_MAX_DEPTH];
+    int depth_buffer[JSON_MAX_DEPTH];
+    int _last_token_type;
 
     int line;
     int line_offset;
@@ -90,10 +83,10 @@ typedef struct {
 
 extern void json_setup(json_Context *context);
 extern json_ErrorType json_read_token(json_Context *context, json_Token *token);
-extern void json_load_buffer(json_Context *context, const char *buffer, json_usize buffer_size);
+extern void json_load_buffer(json_Context *context, const char *buffer, unsigned long buffer_size);
 extern void json_token_setup(
-    json_Token *token, char *key_buffer, int key_buffer_size, char *string_buffer,
-    int string_buffer_size
+    json_Token *token, char *key_buffer, int key_buffer_size, char *value_buffer,
+    int value_buffer_size
 );
 
 #endif
@@ -112,9 +105,9 @@ extern void json_token_setup(
 #endif
 /* TODO: Add all blank charactes */
 
-#define is_blank(c)          (c == ' ' || c == '\t' || c == '\f' || c == '\n')
-#define is_digit(c)          (c >= '0' && c <= '9')
-#define is_alpha_or_digit(c) (c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || is_digit(c))
+#define is_blank(c)        (c == ' ' || c == '\t' || c == '\f' || c == '\n')
+#define is_digit(c)        (c >= '0' && c <= '9')
+#define is_hex_or_digit(c) (c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || is_digit(c))
 #define is_control(c)                                                                           \
     (c == '\n' || c == '\r' || c == '\t' || c == '\b' || c == '\f' || c == '\v' || c == '\0' || \
      c == '\n')
@@ -124,8 +117,7 @@ extern void json_token_setup(
 /* Token */
 
 static inline void json_intern_token_new(json_Context *context, json_Token *token, json_Type type) {
-    context->current_token_type = type;
-
+    context->_last_token_type = token->type;
     token->type = type;
     token->start = context->buffer_offset;
     token->line = context->line;
@@ -212,9 +204,7 @@ json_intern_read_string(json_Context *context, int *length, char *buffer, int bu
                     current_char = json_intern_consume(context, 0);
 
                     /* Check for valid hex digits */
-                    if (!((current_char >= '0' && current_char <= '9') ||
-                          (current_char >= 'a' && current_char <= 'f') ||
-                          (current_char >= 'A' && current_char <= 'F'))) {
+                    if (!is_hex_or_digit(current_char)) {
                         return JSON_ERROR_STRING_INVALID_HEX;
                     }
 
@@ -297,20 +287,82 @@ int json_intern_read_keyword(json_Context *context, json_Token *token) {
     return JSON_ERROR_KEYWORD_INVALID;
 }
 
-#define verify_state(state)                                                    \
-    if ((context->depth_buffer[context->depth_buffer_index] & (state)) == 0) { \
-        return JSON_ERROR_UNEXPECTED_TOKEN;                                    \
+static inline int json_intern_read_number(json_Context *context, char *buffer, int buffer_size) {
+    int offset = 0;
+    char has_sign = JSON_FALSE;
+    char has_exponent = JSON_FALSE;
+    char has_digit = JSON_FALSE;
+    char has_fraction = JSON_FALSE;
+
+    while (json_intern_has_next(context, 0)) {
+        char current_char = json_intern_peek(context, 0);
+
+        switch (current_char) {
+        case '0':
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9':
+            has_digit = JSON_TRUE;
+            break;
+        case '+':
+        case '-':
+            if (has_sign == JSON_TRUE) {
+                return JSON_ERROR_NUMBER_INVALID;
+            }
+
+            has_sign = JSON_TRUE;
+            break;
+        default:
+            goto done;
+        }
+
+        if (offset >= buffer_size) {
+            return JSON_ERROR_NO_MEMORY;
+        }
+
+        buffer[offset++] = current_char;
+        json_intern_consume(context, 0);
     }
+
+done:
+    if (has_digit == JSON_FALSE) {
+        return JSON_ERROR_NUMBER_INVALID;
+    }
+
+    buffer[offset] = 0;
+
+    return JSON_TRUE;
+}
 
 #define get_state()      context->depth_buffer[context->depth_buffer_index]
 #define set_state(state) (get_state() = (state))
 #define has_state(state) ((get_state() & (state)) > 0)
+
+/* A comma preceeding this token must have been read beforehand */
+#define check_for_field_seperator()                             \
+    if ((get_state() & JSON_STATE_NEEDS_FIELD_SEPERATOR) > 0) { \
+        return JSON_ERROR_MISSING_FIELD_SEPERATOR;              \
+    }
+
+/* For this token to be valid, parts of 'state' must match the current state */
+#define verify_state(state)                 \
+    if ((get_state() & (state)) == 0) {     \
+        return JSON_ERROR_UNEXPECTED_TOKEN; \
+    }
+
 #define push_state()                                        \
     if (context->depth_buffer_index + 1 < JSON_MAX_DEPTH) { \
         context->depth_buffer_index++;                      \
     } else {                                                \
         return JSON_ERROR_TOO_DEEP;                         \
     }
+
 #define pop_state()                        \
     if (context->depth_buffer_index > 0) { \
         context->depth_buffer_index--;     \
@@ -321,7 +373,6 @@ int json_intern_read_keyword(json_Context *context, json_Token *token) {
 json_ErrorType json_read_token(json_Context *context, json_Token *token) {
     int status = JSON_TRUE;
     int pre_key_state = 0;
-    int has_field_seperator = 0;
 
     /* FIXME: Actually clear the buffer? */
     token->key_buffer[0] = 0;
@@ -339,69 +390,90 @@ json_ErrorType json_read_token(json_Context *context, json_Token *token) {
         switch (current_char) {
         case '{':
             /* The file root may contain object/arrays */
-            verify_state(JSON_STATE_READ_VALUE | JSON_STATE_READ_ARRAY_VALUE | JSON_STATE_IS_ROOT);
+            verify_state(
+                JSON_STATE_NEEDS_VALUE | JSON_STATE_NEEDS_ARRAY_VALUE | JSON_STATE_IS_ROOT
+            );
+            check_for_field_seperator();
 
             json_intern_token_new(context, token, JSON_TYPE_OBJECT_START);
             json_intern_consume(context, 0);
 
-            if (has_state(JSON_STATE_READ_VALUE)) {
+            if (has_state(JSON_STATE_NEEDS_VALUE)) {
                 set_state(pre_key_state);
             }
 
             push_state();
-            set_state(JSON_STATE_READ_KEY | JSON_STATE_READ_OBJECT_END);
+            set_state(JSON_STATE_NEEDS_KEY | JSON_STATE_NEEDS_OBJECT_END);
             goto has_token;
         case '}':
-            verify_state(JSON_STATE_READ_KEY | JSON_STATE_READ_OBJECT_END);
-
-            /* Correctly handle leading commas */
-            if (has_field_seperator == JSON_TRUE) {
-                return JSON_ERROR_UNEXPECTED_TOKEN;
-            }
+            verify_state(JSON_STATE_NEEDS_KEY | JSON_STATE_NEEDS_OBJECT_END);
 
             json_intern_token_new(context, token, JSON_TYPE_OBJECT_END);
             json_intern_consume(context, 0);
 
+            if (!has_state(JSON_STATE_NEEDS_FIELD_SEPERATOR)) {
+                return JSON_ERROR_UNEXPECTED_TOKEN;
+            }
+
             pop_state();
+
+            /* Objects can occur at root level */
+            if (!has_state(JSON_STATE_IS_ROOT)) {
+                set_state(get_state() | JSON_STATE_NEEDS_FIELD_SEPERATOR);
+            }
+
             goto has_token;
         case '[':
-            verify_state(JSON_STATE_READ_VALUE | JSON_STATE_READ_ARRAY_VALUE | JSON_STATE_IS_ROOT);
+            verify_state(
+                JSON_STATE_NEEDS_VALUE | JSON_STATE_NEEDS_ARRAY_VALUE | JSON_STATE_IS_ROOT
+            );
+            check_for_field_seperator();
 
             json_intern_token_new(context, token, JSON_TYPE_ARRAY_START);
             json_intern_consume(context, 0);
 
-            if (has_state(JSON_STATE_READ_VALUE)) {
+            if (has_state(JSON_STATE_NEEDS_VALUE)) {
                 set_state(pre_key_state);
             }
 
             push_state();
-            set_state(JSON_STATE_READ_ARRAY_VALUE);
+            set_state(JSON_STATE_NEEDS_ARRAY_VALUE);
             goto has_token;
         case ']':
-            verify_state(JSON_STATE_READ_ARRAY_VALUE);
-
-            /* Correctly handle leading commas */
-            if (has_field_seperator == JSON_TRUE) {
-                return JSON_ERROR_UNEXPECTED_TOKEN;
-            }
+            verify_state(JSON_STATE_NEEDS_ARRAY_VALUE);
 
             json_intern_token_new(context, token, JSON_TYPE_ARRAY_END);
             json_intern_consume(context, 0);
 
+            /* Correctly handle leading commas */
+            if (context->_last_token_type != JSON_TYPE_ARRAY_START && !has_state(JSON_STATE_NEEDS_FIELD_SEPERATOR)) {
+                return JSON_ERROR_UNEXPECTED_TOKEN;
+            }
+
             pop_state();
+
+            /* Arrays are special values since they can occur at root */
+            if (!has_state(JSON_STATE_IS_ROOT)) {
+                set_state(get_state() | JSON_STATE_NEEDS_FIELD_SEPERATOR);
+            }
+
             goto has_token;
         case ',':
-            verify_state(JSON_STATE_READ_KEY | JSON_STATE_READ_ARRAY_VALUE);
-            has_field_seperator = JSON_TRUE;
+            verify_state(JSON_STATE_NEEDS_FIELD_SEPERATOR);
 
             json_intern_consume(context, 0);
+            /* We've read the field seperator, we can remove it from the current state */
+            set_state(get_state() ^ JSON_STATE_NEEDS_FIELD_SEPERATOR);
+
             continue;
         /* A '"' can mean one of the following:
          *   1. The key of a value
          *   2. A string as a value
          *   3. A string as an array value */
         case '"':
-            if (has_state(JSON_STATE_READ_KEY)) {
+            check_for_field_seperator();
+
+            if (has_state(JSON_STATE_NEEDS_KEY)) {
                 status = json_intern_read_string(
                     context, &key_length, token->key_buffer, token->key_buffer_size
                 );
@@ -421,18 +493,20 @@ json_ErrorType json_read_token(json_Context *context, json_Token *token) {
                  * current state. The state prior to reading the key is stored so we can
                  * restore it after parsing its value. */
                 pre_key_state = get_state();
-                set_state(JSON_STATE_READ_VALUE);
+                set_state(JSON_STATE_NEEDS_VALUE);
                 continue;
 
-            } else if (has_state(JSON_STATE_READ_VALUE | JSON_STATE_READ_ARRAY_VALUE)) {
+            } else if (has_state(JSON_STATE_NEEDS_VALUE | JSON_STATE_NEEDS_ARRAY_VALUE)) {
                 json_intern_token_new(context, token, JSON_TYPE_STRING);
                 status = json_intern_read_string(
-                    context, &key_length, token->string_buffer, token->string_buffer_size
+                    context, &key_length, token->value_buffer, token->value_buffer_size
                 );
 
-                if (get_state() == JSON_STATE_READ_VALUE) {
+                if (get_state() == JSON_STATE_NEEDS_VALUE) {
                     set_state(pre_key_state);
                 }
+
+                set_state(get_state() | JSON_STATE_NEEDS_FIELD_SEPERATOR);
 
                 goto has_token;
             }
@@ -447,13 +521,32 @@ json_ErrorType json_read_token(json_Context *context, json_Token *token) {
         case 'f':
             token->type = JSON_TYPE_FALSE;
         read_keyword:
-            verify_state(JSON_STATE_READ_VALUE | JSON_STATE_READ_ARRAY_VALUE);
+            verify_state(JSON_STATE_NEEDS_VALUE | JSON_STATE_NEEDS_ARRAY_VALUE);
+            check_for_field_seperator();
+
             json_intern_token_new(context, token, token->type);
             status = json_intern_read_keyword(context, token);
 
-            if (get_state() == JSON_STATE_READ_VALUE) {
+            if (get_state() == JSON_STATE_NEEDS_VALUE) {
                 set_state(pre_key_state);
             }
+            set_state(get_state() | JSON_STATE_NEEDS_FIELD_SEPERATOR);
+
+            goto has_token;
+        }
+
+        if (is_digit(current_char) || current_char == '-' || current_char == '+') {
+            verify_state(JSON_STATE_NEEDS_VALUE | JSON_STATE_NEEDS_ARRAY_VALUE);
+            check_for_field_seperator();
+
+            json_intern_token_new(context, token, JSON_TYPE_NUMBER);
+            status =
+                json_intern_read_number(context, token->value_buffer, token->value_buffer_size);
+
+            if (get_state() == JSON_STATE_NEEDS_VALUE) {
+                set_state(pre_key_state);
+            }
+            set_state(get_state() | JSON_STATE_NEEDS_FIELD_SEPERATOR);
 
             goto has_token;
         }
@@ -482,13 +575,13 @@ has_token:
 #undef pop_state
 
 void json_token_setup(
-    json_Token *token, char *key_buffer, int key_buffer_size, char *string_buffer,
-    int string_buffer_size
+    json_Token *token, char *key_buffer, int key_buffer_size, char *value_buffer,
+    int value_buffer_size
 ) {
     token->key_buffer = key_buffer;
     token->key_buffer_size = key_buffer_size;
-    token->string_buffer = string_buffer;
-    token->string_buffer_size = string_buffer_size;
+    token->value_buffer = value_buffer;
+    token->value_buffer_size = value_buffer_size;
 }
 
 void json_setup(json_Context *context) {
@@ -496,7 +589,7 @@ void json_setup(json_Context *context) {
     context->depth_buffer[0] = JSON_STATE_IS_ROOT;
 }
 
-void json_load_buffer(json_Context *context, const char *buffer, json_usize buffer_size) {
+void json_load_buffer(json_Context *context, const char *buffer, unsigned long buffer_size) {
     context->buffer = buffer;
     context->buffer_size = buffer_size;
 }

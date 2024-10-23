@@ -1,7 +1,11 @@
-#include <stdio.h>
-#include <unistd.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <stdio.h>
 #include <string.h>
+#include <unistd.h>
+
+#include <sys/mman.h>
+#include <sys/stat.h>
 
 #define JSON_IMPLEMENTATION
 #include "../json.h"
@@ -20,10 +24,8 @@ static const char *token_type_to_string(json_Type type) {
         return "array_end";
     case JSON_TYPE_STRING:
         return "string";
-    case JSON_TYPE_INTEGER:
+    case JSON_TYPE_NUMBER:
         return "integer";
-    case JSON_TYPE_REAL:
-        return "real";
     case JSON_TYPE_NULL:
         return "null";
     case JSON_TYPE_FALSE:
@@ -50,13 +52,10 @@ static const char *token_value_to_string(json_Token *token) {
     case JSON_TYPE_ARRAY_START:
     case JSON_TYPE_ARRAY_END:
         return NULL;
+    case JSON_TYPE_NUMBER:
+        return token->value_buffer;
     case JSON_TYPE_STRING:
-        return token->string_buffer;
-    case JSON_TYPE_INTEGER:
-        snprintf(buffer, 64, "%d", token->value.integer);
-        break;
-    case JSON_TYPE_REAL:
-        snprintf(buffer, 64, "%f", token->value.real);
+        return token->value_buffer;
         break;
     }
 #undef BUFFER_SIZE
@@ -66,6 +65,8 @@ static const char *token_value_to_string(json_Token *token) {
 
 static const char *error_to_string(json_ErrorType type) {
     switch (type) {
+    case JSON_ERROR_NUMBER_INVALID:
+        return "error_number_invalid";
     case JSON_ERROR_STRING_INVALID:
         return "error_string_invalid";
     case JSON_ERROR_STRING_INVALID_HEX:
@@ -82,6 +83,8 @@ static const char *error_to_string(json_ErrorType type) {
         return "error_unexpected_token";
     case JSON_ERROR_KEYWORD_INVALID:
         return "error_keyword_invalid";
+    case JSON_ERROR_MISSING_FIELD_SEPERATOR:
+        return "error_missing_field_seperator";
     default:
         break;
     }
@@ -98,34 +101,40 @@ static void dump_state(json_Context *context) {
     char *state_as_string = NULL;
     int bitcount = 0;
 
-    for(int i = 0; i < 31; i++) {
+    for (int i = 0; i < 31; i++) {
         int state_bit = state & (1 << i);
 
-        if(state_bit == 0)
+        if (state_bit == 0) {
             continue;
+        }
 
-        if(bitcount > 0) printf(" | ");
-        bitcount ++;
+        if (bitcount > 0) {
+            printf(" | ");
+        }
+        bitcount++;
 
-        switch(state_bit) {
-            case JSON_STATE_READ_KEY:
-                state_as_string = "READ_KEY";
-                break;
-            case JSON_STATE_READ_VALUE:
-                state_as_string = "READ_VALUE";
-                break;
-            case JSON_STATE_READ_ARRAY_VALUE:
-                state_as_string = "READ_ARRAY_VALUE";
-                break;
-            case JSON_STATE_IS_ROOT:
-                state_as_string = "IS_ROOT";
-                break;
-            case JSON_STATE_READ_OBJECT_END:
-                state_as_string = "READ_OBJECT_END";
-                break;
-            case JSON_STATE_READ_ARRAY_END:
-                state_as_string = "READ_ARRAY_END";
-                break;
+        switch (state_bit) {
+        case JSON_STATE_NEEDS_KEY:
+            state_as_string = "NEEDS_KEY";
+            break;
+        case JSON_STATE_NEEDS_VALUE:
+            state_as_string = "NEEDS_VALUE";
+            break;
+        case JSON_STATE_NEEDS_ARRAY_VALUE:
+            state_as_string = "NEEDS_ARRAY_VALUE";
+            break;
+        case JSON_STATE_NEEDS_FIELD_SEPERATOR:
+            state_as_string = "NEEDS_FIELD_SEPERATOR";
+            break;
+        case JSON_STATE_IS_ROOT:
+            state_as_string = "IS_ROOT";
+            break;
+        case JSON_STATE_NEEDS_OBJECT_END:
+            state_as_string = "NEEDS_OBJECT_END";
+            break;
+        case JSON_STATE_NEEDS_ARRAY_END:
+            state_as_string = "NEEDS_ARRAY_END";
+            break;
         }
 
         printf("%s", state_as_string);
@@ -159,42 +168,70 @@ static void dump(json_Context *context, json_Token *token) {
     printf("\n");
 }
 
-int main(void) {
-#define BUFFER_SIZE 2048
-    char buffer[BUFFER_SIZE] = {0};
-    int buffer_size = 0;
+int parse_json(char *buffer, unsigned long long buffer_size) {
 
-    if((buffer_size = read(0, buffer, BUFFER_SIZE)) <= 0) {
-        perror("failed to read from pipe");
-        return errno;
-    }
-
-    json_Context context = {0};
-    json_Token token = {0};
+    json_Context context = { 0 };
+    json_Token token = { 0 };
 
     char key_buffer[64];
     char string_buffer[256];
 
     json_setup(&context);
-    json_token_setup(&token, (char*)key_buffer, 64, (char*)string_buffer, 256);
+    json_token_setup(&token, (char *)key_buffer, 64, (char *)string_buffer, 256);
 
     json_load_buffer(&context, buffer, buffer_size);
 
     int status = JSON_TRUE;
-    while(status == JSON_TRUE) {
+    while (status == JSON_TRUE) {
         status = json_read_token(&context, &token);
 
-        if(status != JSON_TRUE && status != JSON_FALSE) {
+        if (status != JSON_TRUE && status != JSON_FALSE) {
             print_error(&token, status);
             return -1;
         }
 
-        if(status == JSON_FALSE){
+        if (status == JSON_FALSE) {
             break;
         }
 
         dump(&context, &token);
     }
-
     return 0;
+}
+
+int main(int argc, char **argv) {
+    if (argc <= 1) {
+        char buffer[512] = { 0 };
+        int buffer_size = 0;
+        if ((buffer_size = read(0, buffer, 512)) <= 0) {
+            perror("failed to read from stdin");
+            return errno;
+        }
+
+        return parse_json(buffer, buffer_size);
+    }
+
+    struct stat file_stat;
+    if (stat(argv[1], &file_stat) != 0) {
+        perror("stat failed");
+        return errno;
+    }
+
+    int file_fd = open(argv[1], O_RDONLY);
+    if (file_fd < 0) {
+        perror("open failed");
+        return errno;
+    }
+
+    char *buffer = mmap(NULL, file_stat.st_size, PROT_READ, MAP_PRIVATE, file_fd, 0);
+    if (buffer == MAP_FAILED) {
+        perror("mmap failed");
+        return errno;
+    }
+
+    int status = parse_json(buffer, file_stat.st_size);
+    munmap(buffer, file_stat.st_size);
+    close(file_fd);
+
+    return status;
 }

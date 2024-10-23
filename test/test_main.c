@@ -11,7 +11,9 @@
 #include <sys/stat.h>
 
 int main(int argc, char **argv) {
-    test_init(argc, argv);
+    if(! test_init(argc, argv)) {
+        return -1;
+    }
     test_run_all();
     return 0;
 }

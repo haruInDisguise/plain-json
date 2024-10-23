@@ -22,10 +22,10 @@ TEST(value_parsing, string_too_long) {
     const char *text = "[ \"a_string\"]";
     json_load_buffer(&context, text, strlen(text));
 
-    token.string_buffer_size = 0;
+    token.value_buffer_size = 0;
 
     json_ErrorType status = json_read_token(&context, &token);
     test_assert_eq(status, JSON_TRUE);
     status = json_read_token(&context, &token);
-    test_assert_eq(status, JSON_ERROR_STRING_TOO_LONG);
+    test_assert_eq(status, JSON_ERROR_NO_MEMORY);
 }
