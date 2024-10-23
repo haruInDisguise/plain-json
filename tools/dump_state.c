@@ -10,8 +10,6 @@ static const char *token_type_to_string(json_Type type) {
     switch (type) {
     case JSON_TYPE_UNKNOWN:
         return "unknown";
-    case JSON_TYPE_NULL:
-        return "null";
     case JSON_TYPE_OBJECT_START:
         return "object_start";
     case JSON_TYPE_OBJECT_END:
@@ -26,8 +24,12 @@ static const char *token_type_to_string(json_Type type) {
         return "integer";
     case JSON_TYPE_REAL:
         return "real";
-    case JSON_TYPE_BOOL:
-        return "boolean";
+    case JSON_TYPE_NULL:
+        return "null";
+    case JSON_TYPE_FALSE:
+        return "false";
+    case JSON_TYPE_TRUE:
+        return "true";
     }
 
     return "invalid";
@@ -41,6 +43,8 @@ static const char *token_value_to_string(json_Token *token) {
     switch (token->type) {
     case JSON_TYPE_UNKNOWN:
     case JSON_TYPE_NULL:
+    case JSON_TYPE_TRUE:
+    case JSON_TYPE_FALSE:
     case JSON_TYPE_OBJECT_START:
     case JSON_TYPE_OBJECT_END:
     case JSON_TYPE_ARRAY_START:
@@ -53,9 +57,6 @@ static const char *token_value_to_string(json_Token *token) {
         break;
     case JSON_TYPE_REAL:
         snprintf(buffer, 64, "%f", token->value.real);
-        break;
-    case JSON_TYPE_BOOL:
-        snprintf(buffer, 64, "%s", (token->value.boolean) ? "true" : "false");
         break;
     }
 #undef BUFFER_SIZE
@@ -79,6 +80,8 @@ static const char *error_to_string(json_ErrorType type) {
         return "error_is_root";
     case JSON_ERROR_UNEXPECTED_TOKEN:
         return "error_unexpected_token";
+    case JSON_ERROR_KEYWORD_INVALID:
+        return "error_keyword_invalid";
     default:
         break;
     }

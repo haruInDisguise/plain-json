@@ -8,7 +8,6 @@ test_build_context()
 
 SUIT(value_parsing, test_reset_context, NULL);
 
-/* FIXME: Actually validate the parsed string */
 TEST(value_parsing, string_escapes) {
     const char *text = "[\"\\n\\r\\t\\f\"]";
 
@@ -39,6 +38,30 @@ TEST(value_parsing, string_unicode) {
     status = json_read_token(&context, &token);
     test_assert_eq(status, JSON_TRUE);
     test_assert_string_eq(token.string_buffer, "\\uabcd");
+
+    status = json_read_token(&context, &token);
+    test_assert(status == JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert(status == JSON_FALSE);
+}
+
+TEST(value_parsing, keywords) {
+    const char *text = "[null, true, false]";
+
+    json_load_buffer(&context, text, strlen(text));
+
+    json_ErrorType status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    test_assert_eq(token.type, JSON_TYPE_NULL);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    test_assert_eq(token.type, JSON_TYPE_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    test_assert_eq(token.type, JSON_TYPE_FALSE);
 
     status = json_read_token(&context, &token);
     test_assert(status == JSON_TRUE);
@@ -127,4 +150,56 @@ TEST(value_parsing_malformed, string_unicode_too_short) {
 
     status = json_read_token(&context, &token);
     test_assert(status == JSON_ERROR_NO_MEMORY);
+}
+
+/* FIXME: Decide how to handle unknown keywords. For now, only
+ * words starting with 't', 'f' or 'n' will be parsed as keywords and may return the invalid keyword
+ * error. It might be desireable to return this error for any invalid token starting with a
+ * character */
+TEST(value_parsing_malformed, keywords_invalid) {
+    const char *text = "[what, false]";
+
+    json_load_buffer(&context, text, strlen(text));
+
+    json_ErrorType status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_ERROR_UNEXPECTED_TOKEN);
+}
+
+TEST(value_parsing_malformed, keyword_invalid_true) {
+    const char *text = "[tru]";
+
+    json_load_buffer(&context, text, strlen(text));
+
+    json_ErrorType status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_ERROR_KEYWORD_INVALID);
+}
+
+TEST(value_parsing_malformed, keyword_invalid_null) {
+    const char *text = "[nulo]";
+
+    json_load_buffer(&context, text, strlen(text));
+
+    json_ErrorType status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_ERROR_KEYWORD_INVALID);
+}
+
+TEST(value_parsing_malformed, keyword_invalid_false) {
+    const char *text = "[falsn]";
+
+    json_load_buffer(&context, text, strlen(text));
+
+    json_ErrorType status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_ERROR_KEYWORD_INVALID);
 }

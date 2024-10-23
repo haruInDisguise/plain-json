@@ -22,6 +22,8 @@ typedef enum {
     JSON_ERROR_STRING_INVALID_HEX,
     JSON_ERROR_STRING_UNTERMINATED,
 
+    JSON_ERROR_KEYWORD_INVALID,
+
     JSON_ERROR_NO_MEMORY,
     JSON_ERROR_TOO_DEEP,
     JSON_ERROR_IS_ROOT,
@@ -33,6 +35,8 @@ typedef enum {
     JSON_TYPE_UNKNOWN,
 
     JSON_TYPE_NULL,
+    JSON_TYPE_TRUE,
+    JSON_TYPE_FALSE,
 
     JSON_TYPE_OBJECT_START,
     JSON_TYPE_OBJECT_END,
@@ -43,7 +47,6 @@ typedef enum {
     JSON_TYPE_STRING,
     JSON_TYPE_INTEGER,
     JSON_TYPE_REAL,
-    JSON_TYPE_BOOL,
 } json_Type;
 
 /* FIXME: Using unsigned long for "address size" values is not platform agnostic... */
@@ -139,15 +142,19 @@ static inline int json_intern_has_next(json_Context *context, int offset) {
     return (context->buffer_offset + offset < context->buffer_size);
 }
 
-static inline char json_intern_consume(json_Context *context) {
-    json_assert(context->buffer_offset < context->buffer_size);
-    char next_char = context->buffer[context->buffer_offset++];
-    context->line_offset++;
+/* Consume the current character + count */
+static inline char json_intern_consume(json_Context *context, int count) {
+    json_assert(context->buffer_offset + count < context->buffer_size);
+    char next_char = context->buffer[context->buffer_offset];
+    do {
+        if (next_char == '\n') {
+            context->line++;
+            context->line_offset = 0;
+        }
 
-    if (next_char == '\n') {
-        context->line++;
-        context->line_offset = 0;
-    }
+        next_char = context->buffer[context->buffer_offset++];
+        context->line_offset++;
+    } while (count--);
 
     return next_char;
 }
@@ -161,21 +168,21 @@ static inline char json_intern_peek(json_Context *context, int offset) {
 
 static inline void json_intern_read_blanks(json_Context *context) {
     while (json_intern_has_next(context, 0) && is_blank(json_intern_peek(context, 0))) {
-        json_intern_consume(context);
+        json_intern_consume(context, 0);
     }
 }
 
 static inline json_ErrorType
 json_intern_read_string(json_Context *context, int *length, char *buffer, int buffer_size) {
     json_assert(json_intern_peek(context, 0) == '"');
-    json_intern_consume(context);
+    json_intern_consume(context, 0);
 
     int offset = 0;
     char current_char = '\0';
     char previous_char = '\0';
 
     while (json_intern_has_next(context, 0) && offset < buffer_size) {
-        current_char = json_intern_consume(context);
+        current_char = json_intern_consume(context, 0);
 
         /* Found unescaped quotes */
         if (previous_char != '\\' && current_char == '\"') {
@@ -202,7 +209,7 @@ json_intern_read_string(json_Context *context, int *length, char *buffer, int bu
 
                 int i = 0;
                 for (; i < 4 && offset < buffer_size && json_intern_has_next(context, 1); i++) {
-                    current_char = json_intern_consume(context);
+                    current_char = json_intern_consume(context, 0);
 
                     /* Check for valid hex digits */
                     if (!((current_char >= '0' && current_char <= '9') ||
@@ -255,8 +262,39 @@ json_intern_read_string(json_Context *context, int *length, char *buffer, int bu
     return JSON_TRUE;
 }
 
+/* FIXME: Replace 'json_intern_peek' with a direct memory access */
 int json_intern_read_keyword(json_Context *context, json_Token *token) {
+    char current_char = json_intern_peek(context, 0);
+    json_assert(current_char == 't' || current_char == 'f' || current_char == 'n');
 
+    switch (token->type) {
+    case JSON_TYPE_NULL:
+        if (json_intern_has_next(context, 3) && json_intern_peek(context, 1) == 'u' &&
+            json_intern_peek(context, 2) == 'l' && json_intern_peek(context, 3) == 'l') {
+            json_intern_consume(context, 3);
+            return JSON_TRUE;
+        }
+        break;
+    case JSON_TYPE_TRUE:
+        if (json_intern_has_next(context, 3) && json_intern_peek(context, 1) == 'r' &&
+            json_intern_peek(context, 2) == 'u' && json_intern_peek(context, 3) == 'e') {
+            json_intern_consume(context, 3);
+            return JSON_TRUE;
+        }
+        break;
+    case JSON_TYPE_FALSE:
+        if (json_intern_has_next(context, 4) && json_intern_peek(context, 1) == 'a' &&
+            json_intern_peek(context, 2) == 'l' && json_intern_peek(context, 3) == 's' &&
+            json_intern_peek(context, 4) == 'e') {
+            json_intern_consume(context, 4);
+            return JSON_TRUE;
+        }
+        break;
+    default:
+        break;
+    }
+
+    return JSON_ERROR_KEYWORD_INVALID;
 }
 
 #define verify_state(state)                                                    \
@@ -304,7 +342,7 @@ json_ErrorType json_read_token(json_Context *context, json_Token *token) {
             verify_state(JSON_STATE_READ_VALUE | JSON_STATE_READ_ARRAY_VALUE | JSON_STATE_IS_ROOT);
 
             json_intern_token_new(context, token, JSON_TYPE_OBJECT_START);
-            json_intern_consume(context);
+            json_intern_consume(context, 0);
 
             if (has_state(JSON_STATE_READ_VALUE)) {
                 set_state(pre_key_state);
@@ -322,7 +360,7 @@ json_ErrorType json_read_token(json_Context *context, json_Token *token) {
             }
 
             json_intern_token_new(context, token, JSON_TYPE_OBJECT_END);
-            json_intern_consume(context);
+            json_intern_consume(context, 0);
 
             pop_state();
             goto has_token;
@@ -330,7 +368,7 @@ json_ErrorType json_read_token(json_Context *context, json_Token *token) {
             verify_state(JSON_STATE_READ_VALUE | JSON_STATE_READ_ARRAY_VALUE | JSON_STATE_IS_ROOT);
 
             json_intern_token_new(context, token, JSON_TYPE_ARRAY_START);
-            json_intern_consume(context);
+            json_intern_consume(context, 0);
 
             if (has_state(JSON_STATE_READ_VALUE)) {
                 set_state(pre_key_state);
@@ -348,7 +386,7 @@ json_ErrorType json_read_token(json_Context *context, json_Token *token) {
             }
 
             json_intern_token_new(context, token, JSON_TYPE_ARRAY_END);
-            json_intern_consume(context);
+            json_intern_consume(context, 0);
 
             pop_state();
             goto has_token;
@@ -356,7 +394,7 @@ json_ErrorType json_read_token(json_Context *context, json_Token *token) {
             verify_state(JSON_STATE_READ_KEY | JSON_STATE_READ_ARRAY_VALUE);
             has_field_seperator = JSON_TRUE;
 
-            json_intern_consume(context);
+            json_intern_consume(context, 0);
             continue;
         /* A '"' can mean one of the following:
          *   1. The key of a value
@@ -376,7 +414,7 @@ json_ErrorType json_read_token(json_Context *context, json_Token *token) {
                 if (json_intern_peek(context, 0) != ':') {
                     return JSON_ERROR_UNEXPECTED_TOKEN;
                 }
-                json_intern_consume(context);
+                json_intern_consume(context, 0);
 
                 /* Keys are only vaild inside objects and must be followed by a value.
                  * The key is read as part of its value token and consequently override the
@@ -400,21 +438,27 @@ json_ErrorType json_read_token(json_Context *context, json_Token *token) {
             }
 
             return JSON_ERROR_UNEXPECTED_TOKEN;
-        case 'f':
         case 'n':
+            token->type = JSON_TYPE_NULL;
+            goto read_keyword;
         case 't':
+            token->type = JSON_TYPE_TRUE;
+            goto read_keyword;
+        case 'f':
+            token->type = JSON_TYPE_FALSE;
+        read_keyword:
             verify_state(JSON_STATE_READ_VALUE | JSON_STATE_READ_ARRAY_VALUE);
-            json_intern_token_new(context, token, JSON_TYPE_ARRAY_START);
-            status = read_keyword(context, token);
+            json_intern_token_new(context, token, token->type);
+            status = json_intern_read_keyword(context, token);
 
             if (get_state() == JSON_STATE_READ_VALUE) {
                 set_state(pre_key_state);
             }
 
             goto has_token;
-        default:
-            return JSON_ERROR_UNEXPECTED_TOKEN;
         }
+
+        return JSON_ERROR_UNEXPECTED_TOKEN;
     }
 
     if (has_state(JSON_STATE_IS_ROOT)) {
