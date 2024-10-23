@@ -1,16 +1,28 @@
 CC = clang
 LD = clang
 
-CFLAGS += -Itest/libtest/include
+CFLAGS += -std=c99 -Itest/libtest/include
 CFLAGS += -Wall -Wpedantic -Wextra -Wno-sign-conversion
-CFLAGS += -std=gnu99 -O0 -gdwarf-5 -fno-omit-frame-pointer -fsanitize=address,undefined
+LDFLAGS =
 
-LDFLAGS = -fsanitize=address,undefined
+BUILD_CONFIG ?= debug
+
+ifeq ($(BUILD_CONFIG),debug)
+CFLAGS += -O0 -gdwarf-5 -fno-omit-frame-pointer -fsanitize=address,undefined
+LDFLAGS += -fsanitize=address,undefined
+
+else ifeq ($(BUILD_CONFIG),release)
+CFLAGS += -O3
+LDFLAGS +=
+
+else
+$(error 'Invalid build config: $(BUILD_CONFIG). Possible values are debug/release')
+endif
 
 BUILD_DIR = build
 
 DEBUG_BIN = $(BUILD_DIR)/dump_state
-DEBUG_SRC = ./test/dump_state.c
+DEBUG_SRC = ./tools/dump_state.c
 DEBUG_OBJ := $(patsubst %.c,$(BUILD_DIR)/%.o,$(DEBUG_SRC))
 
 TEST_BIN = $(BUILD_DIR)/run_tests
@@ -40,20 +52,20 @@ clean:
 
 # ----
 
-$(TEST_BIN): $(DEP) $(TEST_OBJ) json.h
+$(TEST_BIN): $(DEP) $(TEST_OBJ)
 	$(LD) $(LDFLAGS) $(TEST_OBJ) -o $@
 
-$(DEBUG_BIN): $(DEP) $(DEBUG_OBJ) json.h
+$(DEBUG_BIN): $(DEP) $(DEBUG_OBJ)
 	$(LD) $(LDFLAGS) $(DEBUG_OBJ) -o $@
 
 -include $(DEP)
 
-$(DEP): $(BUILD_DIR)/%.d: %.c
+$(DEP): $(BUILD_DIR)/%.d: %.c json.h
 	@mkdir -p $(dir $@)
 	@$(CC) $(CFLAGS) $< -MM | \
 		sed 's#$(notdir $*)\.o[ :]*#$(BUILD_PATH)/$*.o $(BUILD_PATH)/$*.d: #g' > $@
 
-$(TEST_OBJ) $(DEBUG_OBJ): $(BUILD_DIR)/%.o: %.c
+$(TEST_OBJ) $(DEBUG_OBJ): $(BUILD_DIR)/%.o: %.c json.h
 	@mkdir -p $(dir $@)
 	$(CC) -c $(CFLAGS) $< -o $@
 

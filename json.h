@@ -18,19 +18,15 @@ typedef enum {
     JSON_FALSE = 0,
     JSON_TRUE = 1,
 
-    JSON_ERROR_CHAR_INVALID,
-
-    JSON_ERROR_UNTERMINATED_OBJECT,
-    JSON_ERROR_UNTERMINATED_ARRAY,
-
     JSON_ERROR_STRING_INVALID,
-    JSON_ERROR_STRING_TOO_LONG,
+    JSON_ERROR_STRING_INVALID_HEX,
     JSON_ERROR_STRING_UNTERMINATED,
 
     JSON_ERROR_NO_MEMORY,
     JSON_ERROR_TOO_DEEP,
     JSON_ERROR_IS_ROOT,
     JSON_ERROR_UNEXPECTED_TOKEN,
+    JSON_ERROR_UNEXPECTED_EOF,
 } json_ErrorType;
 
 typedef enum {
@@ -175,65 +171,61 @@ json_intern_read_string(json_Context *context, int *length, char *buffer, int bu
     json_intern_consume(context);
 
     int offset = 0;
+    char current_char = '\0';
+    char previous_char = '\0';
 
-    while (json_intern_has_next(context, 0) && json_intern_peek(context, 0) != '"' &&
-           offset < buffer_size) {
-        char current_char = json_intern_consume(context);
+    while (json_intern_has_next(context, 0) && offset < buffer_size) {
+        current_char = json_intern_consume(context);
+
+        /* Found unescaped quotes */
+        if (previous_char != '\\' && current_char == '\"') {
+            break;
+        }
 
         if (current_char == '\0' || current_char == '\n') {
             return JSON_ERROR_STRING_UNTERMINATED;
         }
 
-        if (current_char == '\\') {
-            if(offset + 1 >= buffer_size) {
-                return JSON_ERROR_NO_MEMORY;
-            }
-
-            current_char = json_intern_consume(context);
-            offset += 1;
-
+        if (previous_char == '\\') {
             switch (current_char) {
-            case '"':
-                buffer[offset] = '\"';
-                break;
+            case '\"':
             case '\\':
-                buffer[offset] = '\\';
-                break;
             case '/':
-                buffer[offset] = '/';
-                break;
             case 'b':
-                buffer[offset] = '\"';
-                break;
             case 'f':
-                buffer[offset] = '\"';
-                break;
             case 'n':
-                buffer[offset] = '\"';
-                break;
             case 'r':
-                buffer[offset] = '\"';
-                break;
             case 't':
-                buffer[offset] = '\"';
                 break;
-                /* unicode up to 4 bytes/hex digits */
             case 'u':
-                for (int i = 0; i < 4 && offset + i < buffer_size; i++) {
-                    char hex_char = json_intern_peek(context, 0);
+                buffer[offset++] = current_char;
 
-                    /* FIXME: Actually parse the escape sequence into a unicode character */
-                    if (hex_char >= '0' && hex_char <= '9') {
-                        buffer[offset] = hex_char;
-                    } else if (hex_char >= 'a' && hex_char <= 'f') {
-                        buffer[offset] = hex_char;
-                    } else {
-                        break;
+                int i = 0;
+                for (; i < 4 && offset < buffer_size && json_intern_has_next(context, 1); i++) {
+                    current_char = json_intern_consume(context);
+
+                    /* Check for valid hex digits */
+                    if (!((current_char >= '0' && current_char <= '9') ||
+                          (current_char >= 'a' && current_char <= 'f') ||
+                          (current_char >= 'A' && current_char <= 'F'))) {
+                        return JSON_ERROR_STRING_INVALID_HEX;
                     }
 
-                    offset += 1;
+                    buffer[offset++] = current_char;
                 }
-                break;
+
+                /* Read less than four digits. The string buffer is too short or the file buffer is
+                 * out of characters */
+                if (i < 4) {
+                    if (offset >= buffer_size) {
+                        return JSON_ERROR_NO_MEMORY;
+                    } else {
+                        return JSON_ERROR_UNEXPECTED_EOF;
+                    }
+                }
+
+                previous_char = current_char;
+                continue;
             default:
                 return JSON_ERROR_STRING_INVALID;
             }
@@ -245,22 +237,26 @@ json_intern_read_string(json_Context *context, int *length, char *buffer, int bu
         }
 
         buffer[offset++] = current_char;
+        previous_char = current_char;
     }
 
-    if(offset >= buffer_size) {
+    if (offset >= buffer_size) {
         return JSON_ERROR_NO_MEMORY;
     }
 
-    if (!json_intern_has_next(context, 0) || json_intern_peek(context, 0) != '"') {
-        return JSON_ERROR_STRING_UNTERMINATED;
+    if (current_char != '"' || !json_intern_has_next(context, 0)) {
+        return JSON_ERROR_UNEXPECTED_EOF;
     }
 
-    /* Skip terminating '"' */
-    json_intern_consume(context);
+    /* Make sure the output buffer contains a valid c string */
     buffer[offset] = 0;
 
     (*length) = offset;
-    return offset < buffer_size;
+    return JSON_TRUE;
+}
+
+int json_intern_read_keyword(json_Context *context, json_Token *token) {
+
 }
 
 #define verify_state(state)                                                    \
@@ -284,8 +280,8 @@ json_intern_read_string(json_Context *context, int *length, char *buffer, int bu
         return JSON_ERROR_IS_ROOT;         \
     }
 
-extern json_ErrorType json_read_token(json_Context *context, json_Token *token) {
-    int status = 0;
+json_ErrorType json_read_token(json_Context *context, json_Token *token) {
+    int status = JSON_TRUE;
     int pre_key_state = 0;
     int has_field_seperator = 0;
 
@@ -380,7 +376,6 @@ extern json_ErrorType json_read_token(json_Context *context, json_Token *token) 
                 if (json_intern_peek(context, 0) != ':') {
                     return JSON_ERROR_UNEXPECTED_TOKEN;
                 }
-
                 json_intern_consume(context);
 
                 /* Keys are only vaild inside objects and must be followed by a value.
@@ -397,12 +392,6 @@ extern json_ErrorType json_read_token(json_Context *context, json_Token *token) 
                     context, &key_length, token->string_buffer, token->string_buffer_size
                 );
 
-                if (status != JSON_TRUE) {
-                    return status;
-                }
-
-                json_intern_read_blanks(context);
-
                 if (get_state() == JSON_STATE_READ_VALUE) {
                     set_state(pre_key_state);
                 }
@@ -411,14 +400,34 @@ extern json_ErrorType json_read_token(json_Context *context, json_Token *token) 
             }
 
             return JSON_ERROR_UNEXPECTED_TOKEN;
+        case 'f':
+        case 'n':
+        case 't':
+            verify_state(JSON_STATE_READ_VALUE | JSON_STATE_READ_ARRAY_VALUE);
+            json_intern_token_new(context, token, JSON_TYPE_ARRAY_START);
+            status = read_keyword(context, token);
+
+            if (get_state() == JSON_STATE_READ_VALUE) {
+                set_state(pre_key_state);
+            }
+
+            goto has_token;
         default:
             return JSON_ERROR_UNEXPECTED_TOKEN;
         }
     }
 
-    return JSON_FALSE;
+    if (has_state(JSON_STATE_IS_ROOT)) {
+        return JSON_FALSE;
+    }
+
+    return JSON_ERROR_UNEXPECTED_EOF;
 
 has_token:
+    if (status != JSON_TRUE) {
+        return status;
+    }
+
     json_intern_token_finish(context, token);
     return JSON_TRUE;
 }

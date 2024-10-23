@@ -133,7 +133,7 @@ TEST(parsing_malformed, named_object) {
     test_assert_eq(status, JSON_ERROR_UNEXPECTED_TOKEN);
 }
 
-TEST(parsing_malformed, key_too_long) {
+TEST(parsing_malformed, key_buffer_too_short) {
     const char *text = "{ \"test_key\": }}";
     json_load_buffer(&context, text, strlen(text));
 

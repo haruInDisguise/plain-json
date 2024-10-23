@@ -83,6 +83,20 @@ TEST(structure_malformed, array_trailing_comma) {
     test_assert_eq(status, JSON_ERROR_UNEXPECTED_TOKEN);
 }
 
+TEST(structure_malformed, unexpected_root) {
+    const char *text = "{\"array\": []";
+    json_load_buffer(&context, text, strlen(text));
+
+    json_ErrorType status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_ERROR_UNEXPECTED_EOF);
+}
+
 TEST(structure_malformed, array_unmatched) {
     const char *text = "[]]";
 
