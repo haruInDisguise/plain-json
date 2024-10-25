@@ -15,6 +15,10 @@ else ifeq ($(BUILD_CONFIG),release)
 CFLAGS += -O3
 LDFLAGS +=
 
+else ifeq ($(BUILD_CONFIG),test)
+CFLAGS += -O3 -gdwarf-5
+LDFLAGS +=
+
 else
 $(error 'Invalid build config: $(BUILD_CONFIG). Possible values are debug/release')
 endif

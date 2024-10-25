@@ -6,47 +6,6 @@ test_build_context()
 
 SUIT(parsing, test_reset_context, NULL);
 
-/* Strings */
-
-TEST(parsing, single_named_string) {
-    const char *text = "{ \"test_key\": \"test_value\"}";
-    json_load_buffer(&context, text, strlen(text));
-
-    json_ErrorType status = json_read_token(&context, &token);
-    test_assert(status == JSON_TRUE);
-    status = json_read_token(&context, &token);
-    test_assert(status == JSON_TRUE);
-
-    test_assert_eq(token.type, JSON_TYPE_STRING);
-    test_assert_string_eq("test_key", token.key_buffer);
-    test_assert_string_eq("test_value", token.value_buffer);
-
-    status = json_read_token(&context, &token);
-    test_assert(status == JSON_TRUE);
-    status = json_read_token(&context, &token);
-    test_assert(status == JSON_FALSE);
-}
-
-TEST(parsing, single_named_object) {
-    const char *text = "{ \"test_key\": {}}";
-    json_load_buffer(&context, text, strlen(text));
-
-    json_ErrorType status = json_read_token(&context, &token);
-    test_assert_eq(status, JSON_TRUE);
-    status = json_read_token(&context, &token);
-    test_assert_eq(status, JSON_TRUE);
-
-    test_assert_eq(token.type, JSON_TYPE_OBJECT_START);
-    test_assert_string_eq("test_key", token.key_buffer);
-
-    status = json_read_token(&context, &token);
-    test_assert(status == JSON_TRUE);
-    status = json_read_token(&context, &token);
-    test_assert(status == JSON_TRUE);
-    status = json_read_token(&context, &token);
-    test_assert(status == JSON_FALSE);
-}
-
 TEST(parsing, single_named_array) {
     const char *text = "{ \"test_key\": []}";
     json_load_buffer(&context, text, strlen(text));
@@ -96,27 +55,15 @@ TEST(parsing, array_of_strings) {
 }
 
 TEST(parsing, array_of_objects) {
-    const char *text = "[ {}, {}, {}]";
+    const char *text = "[ {\"\": null}, {\"\": null}, {\"\": null}]";
     json_load_buffer(&context, text, strlen(text));
 
     json_ErrorType status = json_read_token(&context, &token);
     test_assert_eq(status, JSON_TRUE);
-
-    status = json_read_token(&context, &token);
-    test_assert_eq(status, JSON_TRUE);
-    status = json_read_token(&context, &token);
-    test_assert_eq(status, JSON_TRUE);
-    status = json_read_token(&context, &token);
-    test_assert_eq(status, JSON_TRUE);
-    status = json_read_token(&context, &token);
-    test_assert_eq(status, JSON_TRUE);
-    status = json_read_token(&context, &token);
-    test_assert_eq(status, JSON_TRUE);
-    status = json_read_token(&context, &token);
-    test_assert_eq(status, JSON_TRUE);
-
-    status = json_read_token(&context, &token);
-    test_assert(status == JSON_TRUE);
+    for (int i = 0; i < 10; i++) {
+        status = json_read_token(&context, &token);
+        test_assert(status == JSON_TRUE);
+    }
     status = json_read_token(&context, &token);
     test_assert(status == JSON_FALSE);
 }

@@ -20,7 +20,6 @@ typedef enum {
     JSON_TRUE = 1,
 
     JSON_ERROR_STRING_INVALID,
-    JSON_ERROR_STRING_INVALID_HEX,
     JSON_ERROR_STRING_UNTERMINATED,
 
     JSON_ERROR_NUMBER_INVALID,
@@ -185,9 +184,15 @@ json_intern_read_string(json_Context *context, int *length, char *buffer, int bu
             return JSON_ERROR_STRING_UNTERMINATED;
         }
 
+        /* ASCII 0x00 to 0x1F are refered to as control characters */
+        /* JSON only supports a subset of those characts, if they are proberly escaped */
+        if (current_char <= 0x1F) {
+            return JSON_ERROR_STRING_INVALID;
+        }
+
         if (previous_char == '\\') {
             switch (current_char) {
-            case '\"':
+            /* \"', '\n' and '\0' are handled seperately */
             case '\\':
             case '/':
             case 'b':
@@ -200,19 +205,22 @@ json_intern_read_string(json_Context *context, int *length, char *buffer, int bu
                 buffer[offset++] = current_char;
 
                 int i = 0;
+                /* NOTE: Support UTF-16. The standard leaves it to the implementation to decide how
+                 * to parse UTF-16 codepoints (has two seperate UTF-8 codepoints or a single one
+                 * with 8 hex digits) */
                 for (; i < 4 && offset < buffer_size && json_intern_has_next(context, 1); i++) {
                     current_char = json_intern_consume(context, 0);
 
                     /* Check for valid hex digits */
                     if (!is_hex_or_digit(current_char)) {
-                        return JSON_ERROR_STRING_INVALID_HEX;
+                        return JSON_ERROR_STRING_INVALID;
                     }
 
                     buffer[offset++] = current_char;
                 }
 
-                /* Read less than four digits. The string buffer is too short or the file buffer is
-                 * out of characters */
+                /* Read less than four digits. The string buffer is too short or the file buffer
+                 * is out of characters */
                 if (i < 4) {
                     if (offset >= buffer_size) {
                         return JSON_ERROR_NO_MEMORY;
@@ -226,11 +234,6 @@ json_intern_read_string(json_Context *context, int *length, char *buffer, int bu
             default:
                 return JSON_ERROR_STRING_INVALID;
             }
-        }
-
-        /* A string may not contain unescaped control characters */
-        if (is_control(current_char)) {
-            return JSON_ERROR_STRING_INVALID;
         }
 
         buffer[offset++] = current_char;
@@ -288,14 +291,21 @@ int json_intern_read_keyword(json_Context *context, json_Token *token) {
 }
 
 static inline int json_intern_read_number(json_Context *context, char *buffer, int buffer_size) {
+    enum {
+        READ_DIGIT,
+        READ_EXPO,
+        READ_EXPO_DIGIT,
+    } status = 0;
+
     int offset = 0;
-    char has_sign = JSON_FALSE;
-    char has_exponent = JSON_FALSE;
-    char has_digit = JSON_FALSE;
-    char has_fraction = JSON_FALSE;
+    char current_char = 0;
+
+    int has_dot = 0;
+    int has_expo = 0;
+    int has_sign = 0;
 
     while (json_intern_has_next(context, 0)) {
-        char current_char = json_intern_peek(context, 0);
+        current_char = json_intern_peek(context, 0);
 
         switch (current_char) {
         case '0':
@@ -308,15 +318,33 @@ static inline int json_intern_read_number(json_Context *context, char *buffer, i
         case '7':
         case '8':
         case '9':
-            has_digit = JSON_TRUE;
+            status = (status == READ_EXPO) ? READ_EXPO_DIGIT : READ_DIGIT;
             break;
         case '+':
         case '-':
-            if (has_sign == JSON_TRUE) {
-                return JSON_ERROR_NUMBER_INVALID;
+            /* Allow sign */
+            if (offset == 0) {
+                break;
             }
 
-            has_sign = JSON_TRUE;
+            if (has_sign || status != READ_EXPO) {
+                return JSON_ERROR_NUMBER_INVALID;
+            }
+            has_sign = 1;
+            break;
+        case 'e':
+        case 'E':
+            if (has_expo || status != READ_DIGIT) {
+                return JSON_ERROR_NUMBER_INVALID;
+            }
+            status = READ_EXPO;
+            has_expo = 1;
+            break;
+        case '.':
+            if (has_dot || status >= READ_EXPO) {
+                return JSON_ERROR_NUMBER_INVALID;
+            }
+            has_dot = 1;
             break;
         default:
             goto done;
@@ -326,17 +354,17 @@ static inline int json_intern_read_number(json_Context *context, char *buffer, i
             return JSON_ERROR_NO_MEMORY;
         }
 
-        buffer[offset++] = current_char;
         json_intern_consume(context, 0);
+        buffer[offset++] = current_char;
     }
 
 done:
-    if (has_digit == JSON_FALSE) {
+    /* Missing the actual exponent */
+    if (status == READ_EXPO) {
         return JSON_ERROR_NUMBER_INVALID;
     }
 
     buffer[offset] = 0;
-
     return JSON_TRUE;
 }
 
@@ -411,7 +439,9 @@ json_ErrorType json_read_token(json_Context *context, json_Token *token) {
             json_intern_token_new(context, token, JSON_TYPE_OBJECT_END);
             json_intern_consume(context, 0);
 
-            if (!has_state(JSON_STATE_NEEDS_FIELD_SEPERATOR)) {
+            /* Handle leading commas and allow empty arrays */
+            if (context->_last_token_type != JSON_TYPE_OBJECT_START &&
+                !has_state(JSON_STATE_NEEDS_FIELD_SEPERATOR)) {
                 return JSON_ERROR_UNEXPECTED_TOKEN;
             }
 
@@ -445,8 +475,9 @@ json_ErrorType json_read_token(json_Context *context, json_Token *token) {
             json_intern_token_new(context, token, JSON_TYPE_ARRAY_END);
             json_intern_consume(context, 0);
 
-            /* Correctly handle leading commas */
-            if (context->_last_token_type != JSON_TYPE_ARRAY_START && !has_state(JSON_STATE_NEEDS_FIELD_SEPERATOR)) {
+            /* Handle leading commas and allow empty arrays */
+            if (context->_last_token_type != JSON_TYPE_ARRAY_START &&
+                !has_state(JSON_STATE_NEEDS_FIELD_SEPERATOR)) {
                 return JSON_ERROR_UNEXPECTED_TOKEN;
             }
 
@@ -535,7 +566,7 @@ json_ErrorType json_read_token(json_Context *context, json_Token *token) {
             goto has_token;
         }
 
-        if (is_digit(current_char) || current_char == '-' || current_char == '+') {
+        if (is_digit(current_char) || current_char == '-') {
             verify_state(JSON_STATE_NEEDS_VALUE | JSON_STATE_NEEDS_ARRAY_VALUE);
             check_for_field_seperator();
 

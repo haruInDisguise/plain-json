@@ -69,8 +69,6 @@ static const char *error_to_string(json_ErrorType type) {
         return "error_number_invalid";
     case JSON_ERROR_STRING_INVALID:
         return "error_string_invalid";
-    case JSON_ERROR_STRING_INVALID_HEX:
-        return "error_string_invalid_hex";
     case JSON_ERROR_STRING_UNTERMINATED:
         return "error_string_unterminated";
     case JSON_ERROR_NO_MEMORY:
@@ -173,11 +171,14 @@ int parse_json(char *buffer, unsigned long long buffer_size) {
     json_Context context = { 0 };
     json_Token token = { 0 };
 
-    char key_buffer[64];
-    char string_buffer[256];
+#define KEY_BUFFER_SIZE 128
+#define STRING_BUFFER_SIZE 64
+
+    char key_buffer[KEY_BUFFER_SIZE];
+    char string_buffer[STRING_BUFFER_SIZE];
 
     json_setup(&context);
-    json_token_setup(&token, (char *)key_buffer, 64, (char *)string_buffer, 256);
+    json_token_setup(&token, (char *)key_buffer, KEY_BUFFER_SIZE, (char *)string_buffer, STRING_BUFFER_SIZE);
 
     json_load_buffer(&context, buffer, buffer_size);
 

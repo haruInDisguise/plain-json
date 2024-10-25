@@ -9,7 +9,7 @@ test_build_context()
 SUIT(value_parsing, test_reset_context, NULL);
 
 TEST(value_parsing, string_escapes) {
-    const char *text = "[\"\\n\\r\\t\\f\"]";
+    const char *text = "[\"\\\"\\\\n\\r\\t\\f\"]";
 
     json_load_buffer(&context, text, strlen(text));
 
@@ -19,7 +19,7 @@ TEST(value_parsing, string_escapes) {
     status = json_read_token(&context, &token);
     test_assert_eq(status, JSON_TRUE);
     test_assert_eq(token.type, JSON_TYPE_STRING);
-    test_assert_string_eq(token.value_buffer, "\\n\\r\\t\\f");
+    test_assert_string_eq(token.value_buffer, "\\\"\\\\n\\r\\t\\f");
 
     status = json_read_token(&context, &token);
     test_assert_eq(status, JSON_TRUE);
@@ -27,8 +27,8 @@ TEST(value_parsing, string_escapes) {
     test_assert_eq(status, JSON_FALSE);
 }
 
-TEST(value_parsing, string_unicode) {
-    const char *text = "[\"\\uabcd\"]";
+TEST(value_parsing, string_escapes_backslash) {
+    const char *text = "[\"\\\\\"]";
 
     json_load_buffer(&context, text, strlen(text));
 
@@ -37,7 +37,26 @@ TEST(value_parsing, string_unicode) {
 
     status = json_read_token(&context, &token);
     test_assert_eq(status, JSON_TRUE);
-    test_assert_string_eq(token.value_buffer, "\\uabcd");
+    test_assert_eq(token.type, JSON_TYPE_STRING);
+    test_assert_string_eq(token.value_buffer, "\\\\");
+
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_FALSE);
+}
+
+TEST(value_parsing, string_unicode_escape) {
+    const char *text = "[\"\\uaBcD\"]";
+
+    json_load_buffer(&context, text, strlen(text));
+
+    json_ErrorType status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    test_assert_string_eq(token.value_buffer, "\\uaBcD");
 
     status = json_read_token(&context, &token);
     test_assert(status == JSON_TRUE);
@@ -115,7 +134,7 @@ TEST(value_parsing_malformed, string_control) {
     test_assert_eq(status, JSON_ERROR_STRING_INVALID);
 }
 
-TEST(value_parsing_malformed, string_unicode_invalid) {
+TEST(value_parsing_malformed, string_unicode_escape_invalid) {
     const char *text = "[\"\\uy\"]";
 
     json_load_buffer(&context, text, strlen(text));
@@ -124,10 +143,10 @@ TEST(value_parsing_malformed, string_unicode_invalid) {
     test_assert_eq(status, JSON_TRUE);
 
     status = json_read_token(&context, &token);
-    test_assert(status == JSON_ERROR_STRING_INVALID_HEX);
+    test_assert(status == JSON_ERROR_STRING_INVALID);
 }
 
-TEST(value_parsing_malformed, string_unicode_eof) {
+TEST(value_parsing_malformed, string_unicode_escape_eof) {
     const char *text = "[\"\\u";
 
     json_load_buffer(&context, text, strlen(text));
@@ -139,7 +158,7 @@ TEST(value_parsing_malformed, string_unicode_eof) {
     test_assert(status == JSON_ERROR_UNEXPECTED_EOF);
 }
 
-TEST(value_parsing_malformed, string_unicode_too_short) {
+TEST(value_parsing_malformed, string_unicode_escape_too_short) {
     const char *text = "[\"\\u";
 
     json_load_buffer(&context, text, strlen(text));
@@ -202,4 +221,114 @@ TEST(value_parsing_malformed, keyword_invalid_false) {
 
     status = json_read_token(&context, &token);
     test_assert_eq(status, JSON_ERROR_KEYWORD_INVALID);
+}
+
+TEST(value_parsing, number_integer) {
+    const char *text = "[12345, -12345]";
+
+    json_load_buffer(&context, text, strlen(text));
+
+    json_ErrorType status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_FALSE);
+}
+
+TEST(value_parsing, number_float) {
+    const char *text = "[123.456, -123.456]";
+
+    json_load_buffer(&context, text, strlen(text));
+
+    json_ErrorType status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_FALSE);
+}
+
+TEST(value_parsing, number_expo) {
+    const char *text = "[123.123e5]";
+
+    json_load_buffer(&context, text, strlen(text));
+
+    json_ErrorType status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_FALSE);
+}
+
+TEST(value_parsing, number_expo_sign) {
+    const char *text = "[123.123e+5, 123.123E-5]";
+
+    json_load_buffer(&context, text, strlen(text));
+
+    json_ErrorType status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_FALSE);
+}
+
+TEST(value_parsing_malformed, number_float) {
+    const char *text = "[12.32.3]";
+
+    json_load_buffer(&context, text, strlen(text));
+
+    json_ErrorType status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_ERROR_NUMBER_INVALID);
+}
+
+TEST(value_parsing_malformed, number_expo_one) {
+    const char *text = "[123.12.3e+5]";
+
+    json_load_buffer(&context, text, strlen(text));
+
+    json_ErrorType status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_ERROR_NUMBER_INVALID);
+}
+
+TEST(value_parsing_malformed, number_expo_two) {
+    const char *text = "[123.123e++5]";
+
+    json_load_buffer(&context, text, strlen(text));
+
+    json_ErrorType status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_ERROR_NUMBER_INVALID);
+}
+
+TEST(value_parsing_malformed, number_expo_three) {
+    const char *text = "[123.123e+]";
+
+    json_load_buffer(&context, text, strlen(text));
+
+    json_ErrorType status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_ERROR_NUMBER_INVALID);
 }

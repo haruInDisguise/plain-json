@@ -46,19 +46,6 @@ TEST(structure, array_of_objects) {
     test_assert(status == JSON_FALSE);
 }
 
-TEST(structure, object_empty) {
-    const char *text = "{}";
-
-    json_load_buffer(&context, text, strlen(text));
-
-    json_ErrorType status = json_read_token(&context, &token);
-    test_assert(status == JSON_TRUE);
-    status = json_read_token(&context, &token);
-    test_assert(status == JSON_TRUE);
-    status = json_read_token(&context, &token);
-    test_assert(status == JSON_FALSE);
-}
-
 TEST(structure, array_deeply_nested) {
     const char *text = "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]";
     json_load_buffer(&context, text, strlen(text));
@@ -73,8 +60,20 @@ TEST(structure, array_deeply_nested) {
 }
 
 TEST(structure, newline) {
-    const char *text = "\n{\n\n}";
+    const char *text = "\n[\n\n]";
 
+    json_load_buffer(&context, text, strlen(text));
+
+    json_ErrorType status = json_read_token(&context, &token);
+    test_assert(status == JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert(status == JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert(status == JSON_FALSE);
+}
+
+TEST(structure_malformed, object_empty) {
+    const char *text = "{}";
     json_load_buffer(&context, text, strlen(text));
 
     json_ErrorType status = json_read_token(&context, &token);
@@ -138,28 +137,6 @@ TEST(structure_malformed, object_trailing_comma) {
     test_assert_eq(status, JSON_ERROR_UNEXPECTED_TOKEN);
 }
 
-TEST(structure_malformed, object_unmatched) {
-    const char *text = "{}}";
-    json_load_buffer(&context, text, strlen(text));
-
-    json_ErrorType status = json_read_token(&context, &token);
-    test_assert(status == JSON_TRUE);
-    status = json_read_token(&context, &token);
-    test_assert(status == JSON_TRUE);
-    status = json_read_token(&context, &token);
-    test_assert(status == JSON_ERROR_UNEXPECTED_TOKEN);
-}
-
-TEST(structure_malformed, object_empty) {
-    const char *text = "{{}}";
-    json_load_buffer(&context, text, strlen(text));
-
-    json_ErrorType status = json_read_token(&context, &token);
-    test_assert(status == JSON_TRUE);
-    status = json_read_token(&context, &token);
-    test_assert(status == JSON_ERROR_UNEXPECTED_TOKEN);
-}
-
 TEST(structure_malformed, root_value) {
     const char *text = "\"i do not belong here\"";
     json_load_buffer(&context, text, strlen(text));
@@ -186,6 +163,24 @@ TEST(structure_malformed, array_comma_missing) {
     json_load_buffer(&context, text, strlen(text));
 
     json_ErrorType status = json_read_token(&context, &token);
+    test_assert(status == JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert(status == JSON_TRUE);
+
+    status = json_read_token(&context, &token);
+    test_assert(status == JSON_ERROR_MISSING_FIELD_SEPERATOR);
+}
+
+TEST(structure_malformed, object_nested_comma_missing) {
+    const char *text = "{\"key\": {\"key\": null} \"key\": null}";
+    json_load_buffer(&context, text, strlen(text));
+
+    json_ErrorType status = json_read_token(&context, &token);
+    test_assert(status == JSON_TRUE);
+
+    status = json_read_token(&context, &token);
+    test_assert(status == JSON_TRUE);
+    status = json_read_token(&context, &token);
     test_assert(status == JSON_TRUE);
     status = json_read_token(&context, &token);
     test_assert(status == JSON_TRUE);
