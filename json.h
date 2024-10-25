@@ -192,8 +192,9 @@ json_intern_read_string(json_Context *context, int *length, char *buffer, int bu
 
         if (previous_char == '\\') {
             switch (current_char) {
-            /* \"', '\n' and '\0' are handled seperately */
+            /* '\n' and '\0' are handled seperately */
             case '\\':
+            case '\"':
             case '/':
             case 'b':
             case 'f':
@@ -202,6 +203,7 @@ json_intern_read_string(json_Context *context, int *length, char *buffer, int bu
             case 't':
                 break;
             case 'u':
+                /* FIXME: Potential buffer overflow */
                 buffer[offset++] = current_char;
 
                 int i = 0;
@@ -228,12 +230,17 @@ json_intern_read_string(json_Context *context, int *length, char *buffer, int bu
                         return JSON_ERROR_UNEXPECTED_EOF;
                     }
                 }
-
-                previous_char = current_char;
+                previous_char = '\0';
                 continue;
+
             default:
                 return JSON_ERROR_STRING_INVALID;
             }
+
+            /* Indicate that an escaped sequence was fully consumed */
+            previous_char = '\0';
+            buffer[offset++] = current_char;
+            continue;
         }
 
         buffer[offset++] = current_char;
