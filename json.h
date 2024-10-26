@@ -316,6 +316,10 @@ static inline int json_intern_read_number(json_Context *context, char *buffer, i
 
         switch (current_char) {
         case '0':
+            /* JSON does not support leading zeros */
+            if(offset == 0 || (offset == 1 && buffer[0] == '-')) {
+                return JSON_ERROR_NUMBER_INVALID;
+            }
         case '1':
         case '2':
         case '3':
