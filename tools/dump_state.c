@@ -38,8 +38,8 @@ static const char *token_type_to_string(json_Type type) {
 }
 
 static const char *token_value_to_string(json_Token *token) {
-#define BUFFER_SIZE 64
-    static char buffer[64] = { 0 };
+#define BUFFER_SIZE 128
+    static char buffer[BUFFER_SIZE] = { 0 };
     memset(buffer, 0, BUFFER_SIZE);
 
     switch (token->type) {
@@ -67,8 +67,10 @@ static const char *error_to_string(json_ErrorType type) {
     switch (type) {
     case JSON_ERROR_NUMBER_INVALID:
         return "error_number_invalid";
-    case JSON_ERROR_STRING_INVALID:
-        return "error_string_invalid";
+    case JSON_ERROR_STRING_INVALID_ASCII:
+        return "error_string_invalid_ascii";
+    case JSON_ERROR_STRING_INVALID_UTF8:
+        return "error_string_invalid_utf8";
     case JSON_ERROR_STRING_UNTERMINATED:
         return "error_string_unterminated";
     case JSON_ERROR_NO_MEMORY:
@@ -158,12 +160,6 @@ static void dump(json_Context *context, json_Token *token) {
         printf(": \"%s\"", value);
     }
     printf("\n");
-
-    for (int i = 0; i < depth; i++) {
-        printf(" -- ");
-    }
-    dump_state(context);
-    printf("\n");
 }
 
 int parse_json(char *buffer, unsigned long long buffer_size) {
@@ -172,7 +168,7 @@ int parse_json(char *buffer, unsigned long long buffer_size) {
     json_Token token = { 0 };
 
 #define KEY_BUFFER_SIZE 128
-#define STRING_BUFFER_SIZE 64
+#define STRING_BUFFER_SIZE 512
 
     char key_buffer[KEY_BUFFER_SIZE];
     char string_buffer[STRING_BUFFER_SIZE];

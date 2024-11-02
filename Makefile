@@ -1,4 +1,4 @@
-CC = clang
+CC ?= clang
 LD = clang
 
 CFLAGS += -std=c99 -Itest/libtest/include
@@ -8,22 +8,24 @@ LDFLAGS =
 BUILD_CONFIG ?= debug
 
 ifeq ($(BUILD_CONFIG),debug)
-CFLAGS += -O0 -gdwarf-5 -fno-omit-frame-pointer -fsanitize=address,undefined
-LDFLAGS += -fsanitize=address,undefined
+CFLAGS += -DJSON_DEBUG -O0 -gdwarf-5 -fno-omit-frame-pointer -fsanitize=undefined
+LDFLAGS += -fsanitize=undefined
 
 else ifeq ($(BUILD_CONFIG),release)
 CFLAGS += -O3
 LDFLAGS +=
 
-else ifeq ($(BUILD_CONFIG),test)
+else ifeq ($(BUILD_CONFIG),perf)
 CFLAGS += -O3 -gdwarf-5
 LDFLAGS +=
 
 else
-$(error 'Invalid build config: $(BUILD_CONFIG). Possible values are debug/release')
+$(error 'Invalid build config: $(BUILD_CONFIG). Possible values are debug/release/perf')
 endif
 
 BUILD_DIR = build
+
+INC_PATH = json.h
 
 DEBUG_BIN = $(BUILD_DIR)/dump_state
 DEBUG_SRC = ./tools/dump_state.c
@@ -33,7 +35,7 @@ TEST_BIN = $(BUILD_DIR)/run_tests
 TEST_SRC = ./test/test_main.c \
 		   ./test/test_structure.c \
 		   ./test/test_parsing.c \
-		   ./test/test_value_parsing.c
+		   ./test/test_utf8.c
 TEST_OBJ := $(patsubst %.c,$(BUILD_DIR)/%.o,$(TEST_SRC))
 
 DEP := $(patsubst %.c,$(BUILD_DIR)/%.d,$(TEST_SRC) $(DEBUG_SRC))
@@ -64,12 +66,12 @@ $(DEBUG_BIN): $(DEP) $(DEBUG_OBJ)
 
 -include $(DEP)
 
-$(DEP): $(BUILD_DIR)/%.d: %.c json.h
+$(DEP): $(BUILD_DIR)/%.d: %.c $(INC_PATH)
 	@mkdir -p $(dir $@)
 	@$(CC) $(CFLAGS) $< -MM | \
 		sed 's#$(notdir $*)\.o[ :]*#$(BUILD_PATH)/$*.o $(BUILD_PATH)/$*.d: #g' > $@
 
-$(TEST_OBJ) $(DEBUG_OBJ): $(BUILD_DIR)/%.o: %.c json.h
+$(TEST_OBJ) $(DEBUG_OBJ): $(BUILD_DIR)/%.o: %.c $(INC_PATH)
 	@mkdir -p $(dir $@)
 	$(CC) -c $(CFLAGS) $< -o $@
 

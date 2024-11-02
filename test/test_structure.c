@@ -1,19 +1,52 @@
-#include <test/test.h>
+#include "test_setup.h"
 
-#include "test_config.h"
+SUIT(structure, test_reset_context, NULL);
 
-#include "../json.h"
-
-test_build_context()
-
-    SUIT(structure, test_reset_context, NULL);
-
-TEST(structure, root_empty) {
-    const char *text = "";
-
+TEST(structure, array_named) {
+    const char *text = "{ \"test_key\": []}";
     json_load_buffer(&context, text, strlen(text));
 
     json_ErrorType status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+
+    test_assert_eq(token.type, JSON_TYPE_ARRAY_START);
+    test_assert_string_eq("test_key", token.key_buffer);
+
+    status = json_read_token(&context, &token);
+    test_assert(status == JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert(status == JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert(status == JSON_FALSE);
+}
+
+TEST(structure, array_of_strings) {
+    const char *text = "[ \"one\", \"two\", \"three\"]";
+    json_load_buffer(&context, text, strlen(text));
+
+    json_ErrorType status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    test_assert_eq(token.type, JSON_TYPE_STRING);
+    test_assert_string_eq("one", token.value_buffer);
+
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    test_assert_eq(token.type, JSON_TYPE_STRING);
+    test_assert_string_eq("two", token.value_buffer);
+
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    test_assert_eq(token.type, JSON_TYPE_STRING);
+    test_assert_string_eq("three", token.value_buffer);
+
+    status = json_read_token(&context, &token);
+    test_assert(status == JSON_TRUE);
+    status = json_read_token(&context, &token);
     test_assert(status == JSON_FALSE);
 }
 
@@ -59,7 +92,7 @@ TEST(structure, array_deeply_nested) {
     test_assert(status == JSON_FALSE);
 }
 
-TEST(structure, newline) {
+TEST(structure, blanks) {
     const char *text = "\n[\n\n]";
 
     json_load_buffer(&context, text, strlen(text));
@@ -85,6 +118,50 @@ TEST(structure_malformed, object_empty) {
 }
 
 SUIT(structure_malformed, test_reset_context, NULL);
+
+TEST(structure_malformed, object_trailing_key) {
+    const char *text = "{ \"test_key\": }}";
+    json_load_buffer(&context, text, strlen(text));
+
+    json_ErrorType status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_ERROR_UNEXPECTED_TOKEN);
+}
+
+TEST(structure_malformed, object_key_buffer_too_short) {
+    const char *text = "{ \"test_key\": }}";
+    json_load_buffer(&context, text, strlen(text));
+
+    token.key_buffer_size = 2;
+
+    json_ErrorType status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_ERROR_NO_MEMORY);
+}
+
+TEST(structure_malformed, array_key) {
+    const char *text = "[ \"test_key\": \"oh no!\"]";
+    json_load_buffer(&context, text, strlen(text));
+
+    json_ErrorType status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_ERROR_UNEXPECTED_TOKEN);
+}
+
+TEST(structure, root_empty) {
+    const char *text = "";
+
+    json_load_buffer(&context, text, strlen(text));
+
+    json_ErrorType status = json_read_token(&context, &token);
+    test_assert(status == JSON_FALSE);
+}
+
 
 TEST(structure_malformed, array_trailing_comma) {
     const char *text = "[ \"one\",]";
