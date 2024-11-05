@@ -40,7 +40,7 @@ TEST(parsing, string_escapes_backslash) {
     test_assert_eq(status, JSON_FALSE);
 }
 
-TEST(parsing, string_unicode_escape) {
+TEST(parsing, string_escape_utf16) {
     const char *text = "[\"\\uaBcD\"]";
 
     json_load_buffer(&context, text, strlen(text));
@@ -128,7 +128,7 @@ TEST(parsing_malformed, string_control) {
     test_assert_eq(status, JSON_ERROR_STRING_INVALID_ASCII);
 }
 
-TEST(parsing_malformed, string_unicode_escape_invalid) {
+TEST(parsing_malformed, string_escape_utf16) {
     const char *text = "[\"\\uy\"]";
 
     json_load_buffer(&context, text, strlen(text));
@@ -137,10 +137,10 @@ TEST(parsing_malformed, string_unicode_escape_invalid) {
     test_assert_eq(status, JSON_TRUE);
 
     status = json_read_token(&context, &token);
-    test_assert(status == JSON_ERROR_STRING_INVALID_UNICODE_ESCAPE);
+    test_assert(status == JSON_ERROR_STRING_INVALID_UTF16_ESCAPE);
 }
 
-TEST(parsing_malformed, string_unicode_escape_eof) {
+TEST(parsing_malformed, string_escape_utf16_incomplete) {
     const char *text = "[\"\\u";
 
     json_load_buffer(&context, text, strlen(text));
@@ -149,11 +149,11 @@ TEST(parsing_malformed, string_unicode_escape_eof) {
     test_assert_eq(status, JSON_TRUE);
 
     status = json_read_token(&context, &token);
-    test_assert(status == JSON_ERROR_UNEXPECTED_EOF);
+    test_assert(status == JSON_ERROR_STRING_INVALID_UTF16_ESCAPE);
 }
 
-TEST(parsing_malformed, string_unicode_escape_too_short) {
-    const char *text = "[\"\\u";
+TEST(parsing_malformed, string_escape_utf16_buffer_too_short) {
+    const char *text = "[\"\\uABCD";
 
     json_load_buffer(&context, text, strlen(text));
     token.value_buffer_size = 2;
@@ -166,7 +166,7 @@ TEST(parsing_malformed, string_unicode_escape_too_short) {
 }
 
 TEST(parsing_malformed, keywords_invalid) {
-    const char *text = "[what, false]";
+    const char *text = "[what]";
 
     json_load_buffer(&context, text, strlen(text));
 
@@ -178,7 +178,7 @@ TEST(parsing_malformed, keywords_invalid) {
 }
 
 TEST(parsing_malformed, keyword_invalid_true) {
-    const char *text = "[tru]";
+    const char *text = "[trun]";
 
     json_load_buffer(&context, text, strlen(text));
 
@@ -190,7 +190,7 @@ TEST(parsing_malformed, keyword_invalid_true) {
 }
 
 TEST(parsing_malformed, keyword_invalid_null) {
-    const char *text = "[nulo]";
+    const char *text = "[nuln]";
 
     json_load_buffer(&context, text, strlen(text));
 
@@ -356,6 +356,28 @@ TEST(parsing_malformed, number_expo_double_sign) {
 
 TEST(parsing_malformed, number_expo_trailing_sign) {
     const char *text = "[123.123e+]";
+
+    json_load_buffer(&context, text, strlen(text));
+
+    json_ErrorType status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_ERROR_NUMBER_INVALID);
+}
+
+TEST(parsing_malformed, number_starting_plus) {
+    const char *text = "[+1]";
+
+    json_load_buffer(&context, text, strlen(text));
+
+    json_ErrorType status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_TRUE);
+    status = json_read_token(&context, &token);
+    test_assert_eq(status, JSON_ERROR_NUMBER_INVALID);
+}
+
+TEST(parsing_malformed, number_double_sign) {
+    const char *text = "[--1]";
 
     json_load_buffer(&context, text, strlen(text));
 

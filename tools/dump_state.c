@@ -96,6 +96,7 @@ static void print_error(json_Token *token, json_ErrorType type) {
     fprintf(stderr, "error: %s at %d:%d\n", error_to_string(type), token->line, token->line_offset);
 }
 
+__attribute__((unused))
 static void dump_state(json_Context *context) {
     int state = context->depth_buffer[context->depth_buffer_index];
     char *state_as_string = NULL;
@@ -162,13 +163,12 @@ static void dump(json_Context *context, json_Token *token) {
     printf("\n");
 }
 
-int parse_json(char *buffer, unsigned long long buffer_size) {
-
-    json_Context context = { 0 };
-    json_Token token = { 0 };
-
 #define KEY_BUFFER_SIZE 128
 #define STRING_BUFFER_SIZE 512
+
+int parse_json(char *buffer, unsigned long long buffer_size) {
+    json_Context context = { 0 };
+    json_Token token = { 0 };
 
     char key_buffer[KEY_BUFFER_SIZE];
     char string_buffer[STRING_BUFFER_SIZE];
