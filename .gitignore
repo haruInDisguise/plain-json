@@ -2,6 +2,3 @@ build
 samples
 
 .cache
-
-fuzz/out
-fuzz/input_raw

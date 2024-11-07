@@ -1,8 +1,8 @@
 #define TEST_IMPLEMENTATION
 #include <test/test.h>
 
-#define JSON_IMPLEMENTATION
-#include "../json.h"
+#define PLAIN_JSON_IMPLEMENTATION
+#include "../plain_json.h"
 
 #include <fcntl.h>
 

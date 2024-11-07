@@ -1,4 +1,4 @@
-# TODO: Replace Make with meson
+# TODO: Replace make with meson
 CFLAGS += -std=c99 -Itest/libtest/include
 CFLAGS += -Wall -Wpedantic -Wextra -Wno-sign-conversion -Wno-implicit-fallthrough
 LDFLAGS =
@@ -17,7 +17,7 @@ $(error 'Invalid build config: $(BUILD_CONFIG). Possible values are debug/releas
 endif
 
 BUILD_DIR = build
-INC_PATH = json.h
+INC_PATH = plain_json.h
 
 DEBUG_BIN = $(BUILD_DIR)/dump_state
 DEBUG_SRC = tools/dump_state.c
@@ -38,20 +38,15 @@ build_bin: $(DEBUG_BIN)
 
 build_tests: $(TEST_BIN)
 
-fuzz:
-	$(MAKE) -C fuzzing
-
 dev: clean
 	@mkdir -p $(BUILD_DIR)
-	bear --append --output "$(BUILD_DIR)/compile_commands.json" -- $(MAKE)
-
-rebuild: clean all
+	bear --output "$(BUILD_DIR)/compile_commands.json" -- $(MAKE)
 
 clean:
 	rm -rf $(BUILD_DIR)
 
 .PHONY: build_bin build_tests fuzz dev rebuild clean
-SUFFIXES:
+.SUFFIXES:
 
 # ----
 

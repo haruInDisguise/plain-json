@@ -2,7 +2,7 @@
 #include <unistd.h>
 
 #define JSON_IMPLEMENTATION
-#include "../json.h"
+#include "../plain_json.h"
 
 #pragma clang optimize off
 
@@ -10,16 +10,16 @@ void parse_json(const char *buffer, size_t buffer_length) {
     char string_buffer[256] = { 0 };
     char key_buffer[64] = { 0 };
 
-    json_Context context = { 0 };
-    json_setup(&context);
-    json_load_buffer(&context, buffer, buffer_length);
+    plain_jsonContext context = { 0 };
+    plain_jsonsetup(&context);
+    plain_jsonload_buffer(&context, buffer, buffer_length);
 
-    json_Token token = { 0 };
-    json_token_setup(&token, key_buffer, 64, string_buffer, 256);
+    plain_jsonToken token = { 0 };
+    plain_jsontoken_setup(&token, key_buffer, 64, string_buffer, 256);
 
     int state = JSON_TRUE;
     while (state == JSON_TRUE) {
-        state = json_read_token(&context, &token);
+        state = plain_jsonread_token(&context, &token);
     }
 }
 
