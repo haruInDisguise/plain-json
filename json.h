@@ -285,7 +285,7 @@ static inline json_ErrorType json_intern_read_string(
             return JSON_ERROR_STRING_INVALID_UTF8;
         }
 
-        if (buffer_size - offset <= 0) {
+        if (offset + length >= buffer_size) {
             return JSON_ERROR_NO_MEMORY;
         }
 
