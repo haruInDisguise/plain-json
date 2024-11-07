@@ -6,8 +6,8 @@ LDFLAGS =
 BUILD_CONFIG ?= debug
 
 ifeq ($(BUILD_CONFIG),debug)
-CFLAGS += -DJSON_DEBUG -O0 -gdwarf-5 -fno-omit-frame-pointer -fsanitize=undefined,address
-LDFLAGS += -fsanitize=undefined,address
+CFLAGS += -DJSON_DEBUG -O0 -gdwarf-5 -fno-omit-frame-pointer -fsanitize=undefined,address --coverage
+LDFLAGS += -fsanitize=undefined,address --coverage
 
 else ifeq ($(BUILD_CONFIG),release)
 CFLAGS += -O3
