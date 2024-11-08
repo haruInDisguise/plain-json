@@ -1,3 +1,4 @@
+#include "libtest/include/test/test.h"
 #include "test_setup.h"
 
 SUIT(parsing, test_reset_context, NULL);
@@ -13,7 +14,7 @@ TEST(parsing, string_escapes) {
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_TRUE);
     test_assert_eq(token.type, PLAIN_JSON_TYPE_STRING);
-    test_assert_string_eq(token.value_buffer, "\\\"\\\\n\\r\\t\\f");
+    test_strcmp(context.buffer + token.start, "\\\"\\\\n\\r\\t\\f", token.length);
 
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_TRUE);
@@ -32,7 +33,7 @@ TEST(parsing, string_escapes_backslash) {
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_TRUE);
     test_assert_eq(token.type, PLAIN_JSON_TYPE_STRING);
-    test_assert_string_eq(token.value_buffer, "\xEE\xBC\xB7");
+    test_strcmp(context.buffer + token.start, "\xEE\xBC\xB7", token.length);
 
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_TRUE);
@@ -50,7 +51,7 @@ TEST(parsing, string_escape_utf16) {
 
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_TRUE);
-    test_assert_string_eq(token.value_buffer, "\\uaBcD");
+    test_strcmp(context.buffer + token.start, "\\uaBcD", token.length);
 
     status = plain_json_read_token(&context, &token);
     test_assert(status == PLAIN_JSON_TRUE);
@@ -106,18 +107,6 @@ TEST(parsing_malformed, string_eof) {
     test_assert(status == PLAIN_JSON_ERROR_UNEXPECTED_EOF);
 }
 
-TEST(parsing_malformed, string_buffer_too_short) {
-    const char *text = "[\"ohhh no!\"]";
-
-    plain_json_load_buffer(&context, text, strlen(text));
-    token.value_buffer_size = 2;
-
-    plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
-    status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_ERROR_NO_MEMORY);
-}
-
 TEST(parsing_malformed, string_control) {
     const char *text = "[\"\t\r\"]";
 
@@ -150,19 +139,6 @@ TEST(parsing_malformed, string_escape_utf16_incomplete) {
 
     status = plain_json_read_token(&context, &token);
     test_assert(status == PLAIN_JSON_ERROR_STRING_INVALID_UTF16_ESCAPE);
-}
-
-TEST(parsing_malformed, string_escape_utf16_buffer_too_short) {
-    const char *text = "[\"\\uABCD";
-
-    plain_json_load_buffer(&context, text, strlen(text));
-    token.value_buffer_size = 2;
-
-    plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
-
-    status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_ERROR_NO_MEMORY);
 }
 
 TEST(parsing_malformed, keywords_invalid) {

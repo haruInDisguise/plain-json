@@ -12,7 +12,7 @@ TEST(structure, array_named) {
     test_assert_eq(status, PLAIN_JSON_TRUE);
 
     test_assert_eq(token.type, PLAIN_JSON_TYPE_ARRAY_START);
-    test_assert_string_eq("test_key", token.key_buffer);
+    test_strcmp(context.buffer + token.key_start, "test_key", token.key_length);
 
     status = plain_json_read_token(&context, &token);
     test_assert(status == PLAIN_JSON_TRUE);
@@ -32,17 +32,17 @@ TEST(structure, array_of_strings) {
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_TRUE);
     test_assert_eq(token.type, PLAIN_JSON_TYPE_STRING);
-    test_assert_string_eq("one", token.value_buffer);
+    test_strcmp(context.buffer + token.start, "one", token.length);
 
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_TRUE);
     test_assert_eq(token.type, PLAIN_JSON_TYPE_STRING);
-    test_assert_string_eq("two", token.value_buffer);
+    test_strcmp(context.buffer + token.start, "two", token.length);
 
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_TRUE);
     test_assert_eq(token.type, PLAIN_JSON_TYPE_STRING);
-    test_assert_string_eq("three", token.value_buffer);
+    test_strcmp(context.buffer + token.start, "three", token.length);
 
     status = plain_json_read_token(&context, &token);
     test_assert(status == PLAIN_JSON_TRUE);
@@ -127,18 +127,6 @@ TEST(structure_malformed, object_trailing_key) {
     test_assert_eq(status, PLAIN_JSON_TRUE);
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_ERROR_UNEXPECTED_TOKEN);
-}
-
-TEST(structure_malformed, object_key_buffer_too_short) {
-    const char *text = "{ \"test_key\": }}";
-    plain_json_load_buffer(&context, text, strlen(text));
-
-    token.key_buffer_size = 2;
-
-    plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
-    status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_ERROR_NO_MEMORY);
 }
 
 TEST(structure_malformed, array_key) {

@@ -38,7 +38,8 @@ typedef enum {
 } plain_json_ErrorType;
 
 typedef enum {
-    PLAIN_JSON_TYPE_UNKNOWN,
+    PLAIN_JSON_TYPE_INVALID,
+    PLAIN_JSON_TYPE_ERROR,
 
     PLAIN_JSON_TYPE_NULL,
     PLAIN_JSON_TYPE_TRUE,
@@ -55,28 +56,24 @@ typedef enum {
 } plain_json_Type;
 
 typedef struct {
-    char *value_buffer;
-    char *key_buffer;
+    unsigned int start;
+    unsigned int length;
 
-    int key_buffer_size;
-    int value_buffer_size;
-
-    int line;
-    int line_offset;
-    int start;
-    int end;
+    unsigned int key_start;
+    unsigned int key_length;
 
     plain_json_Type type;
 } plain_json_Token;
 
+/*! */
 typedef struct {
     const char *buffer;
 
-    unsigned long buffer_size;
-    unsigned long buffer_offset;
+    unsigned int buffer_size;
+    unsigned int buffer_offset;
 
-    int depth_buffer_index;
-    int depth_buffer[PLAIN_JSON_OPTION_MAX_DEPTH];
+    unsigned char depth_buffer_index;
+    unsigned char depth_buffer[PLAIN_JSON_OPTION_MAX_DEPTH];
     /* FIXME: Find a nicer workaround for empty arrays/objects */
     int _last_token_type;
 
@@ -85,12 +82,10 @@ typedef struct {
 } plain_json_Context;
 
 extern void plain_json_setup(plain_json_Context *context);
-extern plain_json_ErrorType plain_json_read_token(plain_json_Context *context, plain_json_Token *token);
-extern void plain_json_load_buffer(plain_json_Context *context, const char *buffer, unsigned long buffer_size);
-extern void plain_json_token_setup(
-    plain_json_Token *token, char *key_buffer, int key_buffer_size, char *value_buffer,
-    int value_buffer_size
-);
+extern plain_json_ErrorType
+plain_json_read_token(plain_json_Context *context, plain_json_Token *token);
+extern void
+plain_json_load_buffer(plain_json_Context *context, const char *buffer, unsigned long buffer_size);
 
 #endif
 
@@ -122,16 +117,15 @@ extern void plain_json_token_setup(
 
 /* Token */
 
-static inline void plain_json_intern_token_new(plain_json_Context *context, plain_json_Token *token, plain_json_Type type) {
+static inline void plain_json_intern_token_reset(
+    plain_json_Context *context, plain_json_Token *token
+) {
     context->_last_token_type = token->type;
-    token->type = type;
-    token->start = context->buffer_offset;
-    token->line = context->line;
-    token->line_offset = context->line_offset;
-}
 
-static inline void plain_json_intern_token_finish(plain_json_Context *context, plain_json_Token *token) {
-    token->end = context->buffer_offset;
+    token->start = context->buffer_offset;
+    token->length = 0;
+    token->key_start = 0;
+    token->key_length = 0;
 }
 
 /* Util */
@@ -226,18 +220,14 @@ static inline void plain_json_intern_read_blanks(plain_json_Context *context) {
  * code_mask    : .....111 ..11.... ........ ........ (0x07, 0x30)
  * pattern      : 11110... 10...... 10...... 10...... (0xF0, 0x80, 0x80, 0x80)
  * mask         : 11111... 11...... 11...... 11...... (0xF8, 0xC0, 0xC0, 0xC0) */
-/* TODO: Not all valid codepoints are used */
-static inline plain_json_ErrorType plain_json_intern_read_string(
-    plain_json_Context *context, long *string_length, char *buffer, long buffer_size
-) {
-    json_assert(plain_json_intern_peek(context, 0) == '"');
-    plain_json_intern_consume(context, 0);
 
+static inline plain_json_ErrorType
+plain_json_intern_read_string(plain_json_Context *context, unsigned int *token_length) {
     long offset = 0;
     char current_char = '\0';
     char previous_char = '\0';
 
-    while (plain_json_intern_has_next(context, 0) && offset < buffer_size) {
+    while (plain_json_intern_has_next(context, 0)) {
         /* Basic layout mask */
         static const unsigned long mask_table[4] = {
             0x80000000UL,
@@ -285,34 +275,25 @@ static inline plain_json_ErrorType plain_json_intern_read_string(
             return PLAIN_JSON_ERROR_STRING_INVALID_UTF8;
         }
 
-        if (offset + length >= buffer_size) {
-            return PLAIN_JSON_ERROR_NO_MEMORY;
-        }
-
         /* TODO: Accessing the file buffer through peek() and consume() would be more consistent,
          * but I find it less readable. */
         switch (length) {
         case 4:
             value |= ((unsigned char)context->buffer[context->buffer_offset + 2] << 0);
-            buffer[offset + 3] = value;
         case 3:
             value |= ((unsigned char)context->buffer[context->buffer_offset + 1] << 8);
-            buffer[offset + 2] = value >> 8;
         case 2:
             value |= ((unsigned char)context->buffer[context->buffer_offset + 0] << 16);
-            buffer[offset + 1] = value >> 16;
 
             value |= ((unsigned int)current_char << 24);
-            buffer[offset] = current_char;
             break;
         case 1:
             /* Unreachable */
             json_assert(0);
         }
 
-        /* Surrogates are UTF-16 codepoints that do not belong in UTF-8, but are
-         * sometimes used no the less. */
         /* FIXME: High/Low Surrogates are not valid UTF-8 */
+        /* FIXME: Not all valid codepoints are used */
         unsigned long is_surrogate = 0; // (value >> 16) >= 0xEDA0;
         unsigned long masked = value & mask_table[length - 1];
         unsigned long code = value & code_table[length - 1];
@@ -354,30 +335,24 @@ static inline plain_json_ErrorType plain_json_intern_read_string(
             case 'r':
             case 't':
                 break;
-            case 'u':
-                buffer[offset++] = current_char;
-
+            case 'u':;
                 int i = 0;
-                for (; i < 4 && offset < buffer_size && plain_json_intern_has_next(context, 1); i++) {
+                for (; i < 4 && plain_json_intern_has_next(context, 1); i++) {
                     current_char = plain_json_intern_consume(context, 0);
 
                     /* Check for valid hex digits */
                     if (!is_hex(current_char)) {
                         return PLAIN_JSON_ERROR_STRING_INVALID_UTF16_ESCAPE;
                     }
-
-                    buffer[offset++] = current_char;
                 }
 
                 /* Read less than four digits. The string buffer is too short or the file buffer
                  * is out of characters */
                 if (i < 4) {
-                    if (offset >= buffer_size) {
-                        return PLAIN_JSON_ERROR_NO_MEMORY;
-                    } else {
-                        return PLAIN_JSON_ERROR_STRING_INVALID_UTF16_ESCAPE;
-                    }
+                    return PLAIN_JSON_ERROR_STRING_INVALID_UTF16_ESCAPE;
                 }
+
+                offset += i;
                 previous_char = '\0';
                 continue;
 
@@ -387,67 +362,67 @@ static inline plain_json_ErrorType plain_json_intern_read_string(
 
             /* Indicate that an escaped sequence was fully consumed */
             previous_char = '\0';
-            buffer[offset++] = current_char;
+            offset ++;
             continue;
         }
 
-        buffer[offset++] = current_char;
         previous_char = current_char;
-    }
-
-    if (offset >= buffer_size) {
-        return PLAIN_JSON_ERROR_NO_MEMORY;
+        offset ++;
     }
 
     if (current_char != '"' || !plain_json_intern_has_next(context, 0)) {
         return PLAIN_JSON_ERROR_UNEXPECTED_EOF;
     }
 
-    /* Make sure the output buffer contains a valid c string */
-    buffer[offset] = 0;
-
-    (*string_length) = offset;
+    (*token_length) = offset;
     return PLAIN_JSON_TRUE;
 }
 
-static inline plain_json_ErrorType plain_json_intern_read_keyword(plain_json_Context *context, plain_json_Token *token) {
+static inline plain_json_ErrorType
+plain_json_intern_read_keyword(plain_json_Context *context, plain_json_Type type, unsigned int *token_length) {
     json_assert(
         plain_json_intern_peek(context, 0) == 't' || json_intern_peek(context, 0) == 'f' ||
         plain_json_intern_peek(context, 0) == 'n'
     );
 
-    switch (token->type) {
+    switch (type) {
     case PLAIN_JSON_TYPE_NULL:
         if (plain_json_intern_has_next(context, 3) && plain_json_intern_peek(context, 1) == 'u' &&
-            plain_json_intern_peek(context, 2) == 'l' && plain_json_intern_peek(context, 3) == 'l') {
+            plain_json_intern_peek(context, 2) == 'l' &&
+            plain_json_intern_peek(context, 3) == 'l') {
             plain_json_intern_consume(context, 3);
+            (*token_length) = 4;
             return PLAIN_JSON_TRUE;
         }
         break;
     case PLAIN_JSON_TYPE_TRUE:
         if (plain_json_intern_has_next(context, 3) && plain_json_intern_peek(context, 1) == 'r' &&
-            plain_json_intern_peek(context, 2) == 'u' && plain_json_intern_peek(context, 3) == 'e') {
+            plain_json_intern_peek(context, 2) == 'u' &&
+            plain_json_intern_peek(context, 3) == 'e') {
             plain_json_intern_consume(context, 3);
+            (*token_length) = 4;
             return PLAIN_JSON_TRUE;
         }
         break;
     case PLAIN_JSON_TYPE_FALSE:
         if (plain_json_intern_has_next(context, 4) && plain_json_intern_peek(context, 1) == 'a' &&
-            plain_json_intern_peek(context, 2) == 'l' && plain_json_intern_peek(context, 3) == 's' &&
+            plain_json_intern_peek(context, 2) == 'l' &&
+            plain_json_intern_peek(context, 3) == 's' &&
             plain_json_intern_peek(context, 4) == 'e') {
             plain_json_intern_consume(context, 4);
+            (*token_length) = 5;
             return PLAIN_JSON_TRUE;
         }
         break;
     default:
-        break;
+        json_assert(0);
     }
 
     return PLAIN_JSON_ERROR_KEYWORD_INVALID;
 }
 
 static inline plain_json_ErrorType
-plain_json_intern_read_number(plain_json_Context *context, char *buffer, int buffer_size) {
+plain_json_intern_read_number(plain_json_Context *context, unsigned int *token_length) {
     enum {
         READ_DIGIT,
         READ_EXPO,
@@ -466,7 +441,7 @@ plain_json_intern_read_number(plain_json_Context *context, char *buffer, int buf
 
         switch (current_char) {
         case '0':
-            /* JSON does not support leading zeros */
+            /* JSON does not allow leading zeros */
             if (offset == 0 || (offset == 1 && has_sign)) {
                 char next_char = plain_json_intern_peek(context, 1);
                 if (is_digit(next_char)) {
@@ -519,12 +494,8 @@ plain_json_intern_read_number(plain_json_Context *context, char *buffer, int buf
             goto done;
         }
 
-        if (offset >= buffer_size) {
-            return PLAIN_JSON_ERROR_NO_MEMORY;
-        }
-
         plain_json_intern_consume(context, 0);
-        buffer[offset++] = current_char;
+        offset ++;
     }
 
 done:
@@ -533,7 +504,7 @@ done:
         return PLAIN_JSON_ERROR_NUMBER_INVALID;
     }
 
-    buffer[offset] = 0;
+    (*token_length) = offset;
     return PLAIN_JSON_TRUE;
 }
 
@@ -542,21 +513,21 @@ done:
 #define has_state(state) ((get_state() & (state)) > 0)
 
 /* A comma preceeding this token must have been read beforehand */
-#define check_for_field_seperator()                             \
+#define check_for_field_seperator()                                   \
     if ((get_state() & PLAIN_JSON_STATE_NEEDS_FIELD_SEPERATOR) > 0) { \
         return PLAIN_JSON_ERROR_MISSING_FIELD_SEPERATOR;              \
     }
 
 /* For this token to be valid, parts of 'state' must match the current state */
-#define verify_state(state)                 \
-    if ((get_state() & (state)) == 0) {     \
+#define verify_state(state)                       \
+    if ((get_state() & (state)) == 0) {           \
         return PLAIN_JSON_ERROR_UNEXPECTED_TOKEN; \
     }
 
-#define push_state()                                               \
+#define push_state()                                                     \
     if (context->depth_buffer_index + 1 < PLAIN_JSON_OPTION_MAX_DEPTH) { \
-        context->depth_buffer_index++;                             \
-    } else {                                                       \
+        context->depth_buffer_index++;                                   \
+    } else {                                                             \
         return PLAIN_JSON_ERROR_TOO_DEEP;                                \
     }
 
@@ -564,14 +535,14 @@ done:
     if (context->depth_buffer_index > 0) { \
         context->depth_buffer_index--;     \
     } else {                               \
-        return PLAIN_JSON_ERROR_IS_ROOT;         \
+        return PLAIN_JSON_ERROR_IS_ROOT;   \
     }
 
 plain_json_ErrorType plain_json_read_token(plain_json_Context *context, plain_json_Token *token) {
     int status = PLAIN_JSON_TRUE;
     int pre_key_state = 0;
 
-    token->key_buffer[0] = 0;
+    plain_json_intern_token_reset(context, token);
 
     while (plain_json_intern_has_next(context, 0)) {
         plain_json_intern_read_blanks(context);
@@ -581,17 +552,16 @@ plain_json_ErrorType plain_json_read_token(plain_json_Context *context, plain_js
         }
 
         char current_char = plain_json_intern_peek(context, 0);
-        long key_length = 0;
-
         switch (current_char) {
         case '{':
             /* The file root may contain object/arrays */
             verify_state(
-                PLAIN_JSON_STATE_NEEDS_VALUE | PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE | PLAIN_JSON_STATE_IS_ROOT
+                PLAIN_JSON_STATE_NEEDS_VALUE | PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE |
+                PLAIN_JSON_STATE_IS_ROOT
             );
             check_for_field_seperator();
 
-            plain_json_intern_token_new(context, token, PLAIN_JSON_TYPE_OBJECT_START);
+            token->type = PLAIN_JSON_TYPE_OBJECT_START;
             plain_json_intern_consume(context, 0);
 
             if (has_state(PLAIN_JSON_STATE_NEEDS_VALUE)) {
@@ -604,7 +574,7 @@ plain_json_ErrorType plain_json_read_token(plain_json_Context *context, plain_js
         case '}':
             verify_state(PLAIN_JSON_STATE_NEEDS_KEY | PLAIN_JSON_STATE_NEEDS_OBJECT_END);
 
-            plain_json_intern_token_new(context, token, PLAIN_JSON_TYPE_OBJECT_END);
+            token->type = PLAIN_JSON_TYPE_OBJECT_END;
             plain_json_intern_consume(context, 0);
 
             /* Handle leading commas and allow empty objects */
@@ -623,11 +593,12 @@ plain_json_ErrorType plain_json_read_token(plain_json_Context *context, plain_js
             goto has_token;
         case '[':
             verify_state(
-                PLAIN_JSON_STATE_NEEDS_VALUE | PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE | PLAIN_JSON_STATE_IS_ROOT
+                PLAIN_JSON_STATE_NEEDS_VALUE | PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE |
+                PLAIN_JSON_STATE_IS_ROOT
             );
             check_for_field_seperator();
 
-            plain_json_intern_token_new(context, token, PLAIN_JSON_TYPE_ARRAY_START);
+            token->type = PLAIN_JSON_TYPE_ARRAY_START;
             plain_json_intern_consume(context, 0);
 
             if (has_state(PLAIN_JSON_STATE_NEEDS_VALUE)) {
@@ -640,7 +611,7 @@ plain_json_ErrorType plain_json_read_token(plain_json_Context *context, plain_js
         case ']':
             verify_state(PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE);
 
-            plain_json_intern_token_new(context, token, PLAIN_JSON_TYPE_ARRAY_END);
+            token->type = PLAIN_JSON_TYPE_ARRAY_END;
             plain_json_intern_consume(context, 0);
 
             /* Handle leading commas and allow empty arrays */
@@ -661,7 +632,6 @@ plain_json_ErrorType plain_json_read_token(plain_json_Context *context, plain_js
             verify_state(PLAIN_JSON_STATE_NEEDS_FIELD_SEPERATOR);
 
             plain_json_intern_consume(context, 0);
-            /* We've read the field seperator, we can remove it from the current state */
             set_state(get_state() ^ PLAIN_JSON_STATE_NEEDS_FIELD_SEPERATOR);
 
             continue;
@@ -671,11 +641,11 @@ plain_json_ErrorType plain_json_read_token(plain_json_Context *context, plain_js
          *   3. A string as an array value */
         case '"':
             check_for_field_seperator();
+            plain_json_intern_consume(context, 0);
 
             if (has_state(PLAIN_JSON_STATE_NEEDS_KEY)) {
-                status = plain_json_intern_read_string(
-                    context, &key_length, token->key_buffer, token->key_buffer_size
-                );
+                token->key_start = context->buffer_offset;
+                status = plain_json_intern_read_string(context, &token->key_length);
                 if (status != PLAIN_JSON_TRUE) {
                     return status;
                 }
@@ -695,11 +665,10 @@ plain_json_ErrorType plain_json_read_token(plain_json_Context *context, plain_js
                 set_state(PLAIN_JSON_STATE_NEEDS_VALUE);
                 continue;
 
-            } else if (has_state(PLAIN_JSON_STATE_NEEDS_VALUE | PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE)) {
-                plain_json_intern_token_new(context, token, PLAIN_JSON_TYPE_STRING);
-                status = plain_json_intern_read_string(
-                    context, &key_length, token->value_buffer, token->value_buffer_size
-                );
+            } else if (has_state( PLAIN_JSON_STATE_NEEDS_VALUE | PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE)) {
+                token->start = context->buffer_offset;
+                token->type = PLAIN_JSON_TYPE_STRING;
+                status = plain_json_intern_read_string(context, &token->length);
 
                 if (get_state() == PLAIN_JSON_STATE_NEEDS_VALUE) {
                     set_state(pre_key_state);
@@ -723,8 +692,7 @@ plain_json_ErrorType plain_json_read_token(plain_json_Context *context, plain_js
             verify_state(PLAIN_JSON_STATE_NEEDS_VALUE | PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE);
             check_for_field_seperator();
 
-            plain_json_intern_token_new(context, token, token->type);
-            status = plain_json_intern_read_keyword(context, token);
+            status = plain_json_intern_read_keyword(context, token->type, &token->length);
 
             if (get_state() == PLAIN_JSON_STATE_NEEDS_VALUE) {
                 set_state(pre_key_state);
@@ -738,9 +706,9 @@ plain_json_ErrorType plain_json_read_token(plain_json_Context *context, plain_js
             verify_state(PLAIN_JSON_STATE_NEEDS_VALUE | PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE);
             check_for_field_seperator();
 
-            plain_json_intern_token_new(context, token, PLAIN_JSON_TYPE_NUMBER);
-            status =
-                plain_json_intern_read_number(context, token->value_buffer, token->value_buffer_size);
+            token->start = context->buffer_offset;
+            token->type = PLAIN_JSON_TYPE_NUMBER;
+            status = plain_json_intern_read_number(context, &token->length);
 
             if (get_state() == PLAIN_JSON_STATE_NEEDS_VALUE) {
                 set_state(pre_key_state);
@@ -766,21 +734,11 @@ has_error:
     return status;
 has_token:
     if (status != PLAIN_JSON_TRUE) {
+        token->type = PLAIN_JSON_TYPE_ERROR;
         goto has_error;
     }
 
-    plain_json_intern_token_finish(context, token);
     return PLAIN_JSON_TRUE;
-}
-
-void plain_json_token_setup(
-    plain_json_Token *token, char *key_buffer, int key_buffer_size, char *value_buffer,
-    int value_buffer_size
-) {
-    token->key_buffer = key_buffer;
-    token->key_buffer_size = key_buffer_size;
-    token->value_buffer = value_buffer;
-    token->value_buffer_size = value_buffer_size;
 }
 
 void plain_json_setup(plain_json_Context *context) {
@@ -788,7 +746,9 @@ void plain_json_setup(plain_json_Context *context) {
     context->depth_buffer[0] = PLAIN_JSON_STATE_IS_ROOT;
 }
 
-void plain_json_load_buffer(plain_json_Context *context, const char *buffer, unsigned long buffer_size) {
+void plain_json_load_buffer(
+    plain_json_Context *context, const char *buffer, unsigned long buffer_size
+) {
     context->buffer = buffer;
     context->buffer_size = buffer_size;
 }

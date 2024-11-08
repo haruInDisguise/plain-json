@@ -12,8 +12,10 @@
 
 static const char *token_type_to_string(plain_json_Type type) {
     switch (type) {
-    case PLAIN_JSON_TYPE_UNKNOWN:
-        return "unknown";
+    case PLAIN_JSON_TYPE_INVALID:
+        return "invalid";
+    case PLAIN_JSON_TYPE_ERROR:
+        return "error";
     case PLAIN_JSON_TYPE_OBJECT_START:
         return "object_start";
     case PLAIN_JSON_TYPE_OBJECT_END:
@@ -35,32 +37,6 @@ static const char *token_type_to_string(plain_json_Type type) {
     }
 
     return "invalid";
-}
-
-static const char *token_value_to_string(plain_json_Token *token) {
-#define BUFFER_SIZE 128
-    static char buffer[BUFFER_SIZE] = { 0 };
-    memset(buffer, 0, BUFFER_SIZE);
-
-    switch (token->type) {
-    case PLAIN_JSON_TYPE_UNKNOWN:
-    case PLAIN_JSON_TYPE_NULL:
-    case PLAIN_JSON_TYPE_TRUE:
-    case PLAIN_JSON_TYPE_FALSE:
-    case PLAIN_JSON_TYPE_OBJECT_START:
-    case PLAIN_JSON_TYPE_OBJECT_END:
-    case PLAIN_JSON_TYPE_ARRAY_START:
-    case PLAIN_JSON_TYPE_ARRAY_END:
-        return NULL;
-    case PLAIN_JSON_TYPE_NUMBER:
-        return token->value_buffer;
-    case PLAIN_JSON_TYPE_STRING:
-        return token->value_buffer;
-        break;
-    }
-#undef BUFFER_SIZE
-
-    return buffer;
 }
 
 static const char *error_to_string(plain_json_ErrorType type) {
@@ -92,10 +68,9 @@ static const char *error_to_string(plain_json_ErrorType type) {
     return "unknown error";
 }
 
-static void print_error(plain_json_Token *token, plain_json_ErrorType type) {
-    fprintf(stderr, "error: %s at %d:%d\n", error_to_string(type), token->line, token->line_offset);
+static void print_error(plain_json_Context *context, plain_json_ErrorType type) {
+    fprintf(stderr, "error: %s at %d:%d\n", error_to_string(type), context->line, context->line_offset);
 }
-
 __attribute__((unused))
 static void dump_state(plain_json_Context *context) {
     int state = context->depth_buffer[context->depth_buffer_index];
@@ -142,44 +117,37 @@ static void dump_state(plain_json_Context *context) {
     }
 }
 
+#define BUFFER_SIZE 128
 static void dump(plain_json_Context *context, plain_json_Token *token) {
     int depth = context->depth_buffer_index;
     for (int i = 0; i < depth; i++) {
         printf(" -- ");
     }
 
-    const char *value = token_value_to_string(token);
-    const char *type = token_type_to_string(token->type);
+    printf("%s", token_type_to_string(token->type));
 
-    printf("[%s:%d:%d]", type, token->line, token->line_offset);
-
-    if (strlen(token->key_buffer)) {
-        printf(" \"%s\"", token->key_buffer);
+    char key_buffer[BUFFER_SIZE] = {0};
+    if(token->key_length > 0) {
+        memcpy(key_buffer, context->buffer + token->key_start, (token->key_length <= BUFFER_SIZE) ? token->key_length : BUFFER_SIZE);
+        printf(": \"%s\" = ", key_buffer);
     }
 
-    if (value != NULL) {
-        if(token->type == PLAIN_JSON_TYPE_STRING) {
-            printf(": \"%s\"", value);
-        } else {
-            printf(": %s", value);
-        }
+    char value_buffer[BUFFER_SIZE] = {0};
+    if(token->start > 0) {
+        memcpy(value_buffer, context->buffer + token->start, (token->length <= BUFFER_SIZE) ? token->length : BUFFER_SIZE);
+        printf(" '%s'", value_buffer);
     }
-    printf("\n");
+
+    printf(" [");
+    dump_state(context);
+    printf("]\n");
 }
-
-#define KEY_BUFFER_SIZE 128
-#define STRING_BUFFER_SIZE 512
 
 int parse_json(char *buffer, unsigned long long buffer_size) {
     plain_json_Context context = { 0 };
     plain_json_Token token = { 0 };
 
-    char key_buffer[KEY_BUFFER_SIZE];
-    char string_buffer[STRING_BUFFER_SIZE];
-
     plain_json_setup(&context);
-    plain_json_token_setup(&token, (char *)key_buffer, KEY_BUFFER_SIZE, (char *)string_buffer, STRING_BUFFER_SIZE);
-
     plain_json_load_buffer(&context, buffer, buffer_size);
 
     int status = PLAIN_JSON_TRUE;
@@ -187,7 +155,7 @@ int parse_json(char *buffer, unsigned long long buffer_size) {
         status = plain_json_read_token(&context, &token);
 
         if (status != PLAIN_JSON_TRUE && status != PLAIN_JSON_FALSE) {
-            print_error(&token, status);
+            print_error(&context, status);
             return -1;
         }
 
