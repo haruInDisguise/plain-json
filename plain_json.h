@@ -81,11 +81,22 @@ typedef struct {
     int line_offset;
 } plain_json_Context;
 
-extern void plain_json_setup(plain_json_Context *context);
-extern plain_json_ErrorType
-plain_json_read_token(plain_json_Context *context, plain_json_Token *token);
-extern void
-plain_json_load_buffer(plain_json_Context *context, const char *buffer, unsigned long buffer_size);
+extern plain_json_ErrorType plain_json_read_token(plain_json_Context *context, plain_json_Token *token);
+
+/// This function reads tokens into a preallocated buffer.
+///
+/// ARGS
+///     context:            The context that tracks the parsing process
+///     tokens:             A preallocated buffer of tokens.
+///     num_tokens:         The size of the preallocated token buffer.
+///     tokens_read:        Stores the total number of read tokens.
+///
+/// RETURN
+///     PLAIN_JSON_TRUE:    The entire token buffer has been filled, but there is still unprocessed JSON data.
+///     PLAIN_JSON_FALSE:   The JSON data has been fully processed.
+///     <error code>:       An error occured during processing.
+extern plain_json_ErrorType plain_json_read_token_buffered(plain_json_Context *context, plain_json_Token *tokens, int num_tokens, int *tokens_read);
+extern void plain_json_load_buffer(plain_json_Context *context, const char *buffer, unsigned long buffer_size);
 
 #endif
 
@@ -120,12 +131,10 @@ plain_json_load_buffer(plain_json_Context *context, const char *buffer, unsigned
 static inline void plain_json_intern_token_reset(
     plain_json_Context *context, plain_json_Token *token
 ) {
-    context->_last_token_type = token->type;
-
-    token->start = context->buffer_offset;
     token->length = 0;
-    token->key_start = 0;
+    token->start = context->buffer_offset;
     token->key_length = 0;
+    token->key_start = 0;
 }
 
 /* Util */
@@ -538,7 +547,7 @@ done:
         return PLAIN_JSON_ERROR_IS_ROOT;   \
     }
 
-plain_json_ErrorType plain_json_read_token(plain_json_Context *context, plain_json_Token *token) {
+static plain_json_ErrorType plain_json_read_token_impl(plain_json_Context *context, plain_json_Token *token) {
     int status = PLAIN_JSON_TRUE;
     int pre_key_state = 0;
 
@@ -548,7 +557,7 @@ plain_json_ErrorType plain_json_read_token(plain_json_Context *context, plain_js
         plain_json_intern_read_blanks(context);
 
         if (!plain_json_intern_has_next(context, 0)) {
-            goto done;
+            goto is_eof;
         }
 
         char current_char = plain_json_intern_peek(context, 0);
@@ -721,8 +730,8 @@ plain_json_ErrorType plain_json_read_token(plain_json_Context *context, plain_js
         return PLAIN_JSON_ERROR_UNEXPECTED_TOKEN;
     }
 
-    /* There are no more tokens to read */
-done:
+is_eof:
+    /* There are no more tokens to read. */
     if (has_state(PLAIN_JSON_STATE_IS_ROOT)) {
         return PLAIN_JSON_FALSE;
     }
@@ -730,25 +739,33 @@ done:
     status = PLAIN_JSON_ERROR_UNEXPECTED_EOF;
 
 has_error:
-    /* TODO: Build some sort of error token? */
-    return status;
 has_token:
-    if (status != PLAIN_JSON_TRUE) {
-        token->type = PLAIN_JSON_TYPE_ERROR;
-        goto has_error;
-    }
-
-    return PLAIN_JSON_TRUE;
+    context->_last_token_type = token->type;
+    return status;
 }
 
-void plain_json_setup(plain_json_Context *context) {
-    context->buffer_offset = 0;
-    context->depth_buffer[0] = PLAIN_JSON_STATE_IS_ROOT;
+plain_json_ErrorType plain_json_read_token(plain_json_Context *context, plain_json_Token *token) {
+    int dummy = 0;
+    return plain_json_read_token_impl(context, token);
+}
+
+plain_json_ErrorType plain_json_read_token_buffered(plain_json_Context *context, plain_json_Token *tokens, int num_tokens, int *tokens_read) {
+    int status = PLAIN_JSON_TRUE;
+    for((*tokens_read) = 0; (*tokens_read) < num_tokens && status == PLAIN_JSON_TRUE; (*tokens_read)++) {
+        status = plain_json_read_token_impl(context, &tokens[*tokens_read]);
+    }
+
+    return status;
 }
 
 void plain_json_load_buffer(
     plain_json_Context *context, const char *buffer, unsigned long buffer_size
 ) {
+    context->line = 0;
+    context->line_offset = 0;
+    context->depth_buffer_index = 0;
+    context->depth_buffer[0] = PLAIN_JSON_STATE_IS_ROOT;
+
     context->buffer = buffer;
     context->buffer_size = buffer_size;
 }

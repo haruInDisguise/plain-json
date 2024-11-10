@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -69,10 +70,11 @@ static const char *error_to_string(plain_json_ErrorType type) {
 }
 
 static void print_error(plain_json_Context *context, plain_json_ErrorType type) {
-    fprintf(stderr, "error: %s at %d:%d\n", error_to_string(type), context->line, context->line_offset);
+    fprintf(
+        stderr, "error: %s at %d:%d\n", error_to_string(type), context->line, context->line_offset
+    );
 }
-__attribute__((unused))
-static void dump_state(plain_json_Context *context) {
+__attribute__((unused)) static void dump_state(plain_json_Context *context) {
     int state = context->depth_buffer[context->depth_buffer_index];
     char *state_as_string = NULL;
     int bitcount = 0;
@@ -117,54 +119,79 @@ static void dump_state(plain_json_Context *context) {
     }
 }
 
-#define BUFFER_SIZE 128
+#define BUFFER_SIZE 512
 static void dump(plain_json_Context *context, plain_json_Token *token) {
+    static int previous_depth = 0;
     int depth = context->depth_buffer_index;
+
+    if (context->depth_buffer_index > previous_depth) {
+        depth--;
+    }
+
+    previous_depth = context->depth_buffer_index;
+
     for (int i = 0; i < depth; i++) {
         printf(" -- ");
     }
 
     printf("%s", token_type_to_string(token->type));
 
-    char key_buffer[BUFFER_SIZE] = {0};
-    if(token->key_length > 0) {
-        memcpy(key_buffer, context->buffer + token->key_start, (token->key_length <= BUFFER_SIZE) ? token->key_length : BUFFER_SIZE);
-        printf(": \"%s\" = ", key_buffer);
+    char buffer[BUFFER_SIZE] = { 0 };
+    if (token->key_length > 0) {
+        memset(buffer, 0, sizeof(buffer) / sizeof(*buffer));
+        memcpy(
+            buffer, context->buffer + token->key_start,
+            (token->key_length <= BUFFER_SIZE) ? token->key_length : BUFFER_SIZE
+        );
+        printf(": \"%s\"", buffer);
     }
 
-    char value_buffer[BUFFER_SIZE] = {0};
-    if(token->start > 0) {
-        memcpy(value_buffer, context->buffer + token->start, (token->length <= BUFFER_SIZE) ? token->length : BUFFER_SIZE);
-        printf(" '%s'", value_buffer);
+    if (token->length > 0) {
+        memset(buffer, 0, sizeof(buffer) / sizeof(*buffer));
+        memcpy(
+            buffer, context->buffer + token->start,
+            (token->length <= BUFFER_SIZE) ? token->length : BUFFER_SIZE
+        );
+        printf(" = '%s'", buffer);
     }
 
-    printf(" [");
-    dump_state(context);
-    printf("]\n");
+    printf("\n");
 }
 
+#define TOKEN_PAGE_SIZE 256
 int parse_json(char *buffer, unsigned long long buffer_size) {
     plain_json_Context context = { 0 };
-    plain_json_Token token = { 0 };
-
-    plain_json_setup(&context);
     plain_json_load_buffer(&context, buffer, buffer_size);
-
     int status = PLAIN_JSON_TRUE;
-    while (status == PLAIN_JSON_TRUE) {
-        status = plain_json_read_token(&context, &token);
 
+#if 0
+    plain_json_Token token;
+    while ((status = plain_json_read_token(&context, &token)) == PLAIN_JSON_TRUE) {
         if (status != PLAIN_JSON_TRUE && status != PLAIN_JSON_FALSE) {
             print_error(&context, status);
             return -1;
         }
 
-        if (status == PLAIN_JSON_FALSE) {
-            break;
-        }
-
         dump(&context, &token);
     }
+#else
+    plain_json_Token *tokens = malloc(TOKEN_PAGE_SIZE * sizeof(*tokens));
+    int tokens_read = 0;
+
+    status = plain_json_read_token_buffered(&context, tokens, TOKEN_PAGE_SIZE, &tokens_read);
+    if (status != PLAIN_JSON_TRUE && status != PLAIN_JSON_FALSE) {
+        print_error(&context, status);
+        free(tokens);
+        return -1;
+    }
+
+    for (int i = 0; i < tokens_read; i++) {
+        dump(&context, tokens + i);
+    }
+
+    free(tokens);
+#endif
+
     return 0;
 }
 

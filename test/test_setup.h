@@ -18,7 +18,6 @@ static plain_json_Token token = { 0 };
 static void test_reset_context(void) {
     memset(&context, 0, sizeof(context));
     memset(&token, 0, sizeof(token));
-    plain_json_setup(&context);
 }
 
 #define test_strcmp(buffer, string, length)                                        \
