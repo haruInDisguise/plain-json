@@ -55,6 +55,18 @@ typedef enum {
     PLAIN_JSON_TYPE_NUMBER,
 } plain_json_Type;
 
+/// A single JSON token
+///
+/// FIELDS
+///     start:          The byte offset where the value (if any) starts
+///     length:         The values length in bytes
+///     key_start:      The byte offset where the key string (if any) starts
+///     key_length:     The keys length in bytes
+///     type:           The type of this token
+///
+/// NOTE
+///     If the token has no value, both start and length will be zero. If it has no key, key_start and key_length
+///     will be zero.
 typedef struct {
     unsigned int start;
     unsigned int length;
@@ -65,15 +77,22 @@ typedef struct {
     plain_json_Type type;
 } plain_json_Token;
 
-/*! */
+/// The parsing context.
+///
+/// FIELDS
+///     line:           The current line number
+///     line_offset:    The current line offset
+///
+/// NOTE
+///     All fields should be treated as read-only. Values starting with an underscore are reserved for internal use
 typedef struct {
-    const char *buffer;
+    const char *_buffer;
 
-    unsigned int buffer_size;
-    unsigned int buffer_offset;
+    unsigned int _buffer_size;
+    unsigned int _buffer_offset;
 
-    unsigned char depth_buffer_index;
-    unsigned char depth_buffer[PLAIN_JSON_OPTION_MAX_DEPTH];
+    unsigned char _depth_buffer_index;
+    unsigned char _depth_buffer[PLAIN_JSON_OPTION_MAX_DEPTH];
     /* FIXME: Find a nicer workaround for empty arrays/objects */
     int _last_token_type;
 
@@ -81,9 +100,19 @@ typedef struct {
     int line_offset;
 } plain_json_Context;
 
+/// Read a single token
+///
+/// ARGS
+///     context:            The context that tracks the parsing process.
+///     token:              The processed token
+///
+/// RETURN
+///     PLAIN_JSON_TRUE:    There is unprocessed JSON data.
+///     PLAIN_JSON_FALSE:   The JSON data has been fullly processed.
+///     <error code>:       An error occured during processing.
 extern plain_json_ErrorType plain_json_read_token(plain_json_Context *context, plain_json_Token *token);
 
-/// This function reads tokens into a preallocated buffer.
+/// Read tokens into a preallocated buffer.
 ///
 /// ARGS
 ///     context:            The context that tracks the parsing process
@@ -96,6 +125,13 @@ extern plain_json_ErrorType plain_json_read_token(plain_json_Context *context, p
 ///     PLAIN_JSON_FALSE:   The JSON data has been fully processed.
 ///     <error code>:       An error occured during processing.
 extern plain_json_ErrorType plain_json_read_token_buffered(plain_json_Context *context, plain_json_Token *tokens, int num_tokens, int *tokens_read);
+
+/// Setup a new parsing context.
+///
+/// ARGS
+///     context             The target context
+///     buffer              The raw JSON text.
+///     buffer_size         Size of the JSON text.
 extern void plain_json_load_buffer(plain_json_Context *context, const char *buffer, unsigned long buffer_size);
 
 #endif
@@ -132,7 +168,7 @@ static inline void plain_json_intern_token_reset(
     plain_json_Context *context, plain_json_Token *token
 ) {
     token->length = 0;
-    token->start = context->buffer_offset;
+    token->start = context->_buffer_offset;
     token->key_length = 0;
     token->key_start = 0;
 }
@@ -140,20 +176,20 @@ static inline void plain_json_intern_token_reset(
 /* Util */
 
 static inline char plain_json_intern_has_next(plain_json_Context *context, int offset) {
-    return (context->buffer_offset + offset < context->buffer_size);
+    return (context->_buffer_offset + offset < context->_buffer_size);
 }
 
 /* Consume the current character + count */
 static inline char plain_json_intern_consume(plain_json_Context *context, int count) {
     json_assert(context->buffer_offset + count < context->buffer_size);
-    char next_char = context->buffer[context->buffer_offset];
+    char next_char = context->_buffer[context->_buffer_offset];
     do {
         if (next_char == '\n') {
             context->line++;
             context->line_offset = 0;
         }
 
-        next_char = context->buffer[context->buffer_offset++];
+        next_char = context->_buffer[context->_buffer_offset++];
         context->line_offset++;
     } while (count--);
 
@@ -162,7 +198,7 @@ static inline char plain_json_intern_consume(plain_json_Context *context, int co
 
 static inline char plain_json_intern_peek(plain_json_Context *context, int offset) {
     json_assert(context->buffer_offset + offset < context->buffer_size);
-    return context->buffer[context->buffer_offset + offset];
+    return context->_buffer[context->_buffer_offset + offset];
 }
 
 /* Parsing */
@@ -288,11 +324,11 @@ plain_json_intern_read_string(plain_json_Context *context, unsigned int *token_l
          * but I find it less readable. */
         switch (length) {
         case 4:
-            value |= ((unsigned char)context->buffer[context->buffer_offset + 2] << 0);
+            value |= ((unsigned char)context->_buffer[context->_buffer_offset + 2] << 0);
         case 3:
-            value |= ((unsigned char)context->buffer[context->buffer_offset + 1] << 8);
+            value |= ((unsigned char)context->_buffer[context->_buffer_offset + 1] << 8);
         case 2:
-            value |= ((unsigned char)context->buffer[context->buffer_offset + 0] << 16);
+            value |= ((unsigned char)context->_buffer[context->_buffer_offset + 0] << 16);
 
             value |= ((unsigned int)current_char << 24);
             break;
@@ -517,7 +553,7 @@ done:
     return PLAIN_JSON_TRUE;
 }
 
-#define get_state()      context->depth_buffer[context->depth_buffer_index]
+#define get_state()      context->_depth_buffer[context->_depth_buffer_index]
 #define set_state(state) (get_state() = (state))
 #define has_state(state) ((get_state() & (state)) > 0)
 
@@ -534,15 +570,15 @@ done:
     }
 
 #define push_state()                                                     \
-    if (context->depth_buffer_index + 1 < PLAIN_JSON_OPTION_MAX_DEPTH) { \
-        context->depth_buffer_index++;                                   \
+    if (context->_depth_buffer_index + 1 < PLAIN_JSON_OPTION_MAX_DEPTH) { \
+        context->_depth_buffer_index++;                                   \
     } else {                                                             \
         return PLAIN_JSON_ERROR_TOO_DEEP;                                \
     }
 
 #define pop_state()                        \
-    if (context->depth_buffer_index > 0) { \
-        context->depth_buffer_index--;     \
+    if (context->_depth_buffer_index > 0) { \
+        context->_depth_buffer_index--;     \
     } else {                               \
         return PLAIN_JSON_ERROR_IS_ROOT;   \
     }
@@ -653,7 +689,7 @@ static plain_json_ErrorType plain_json_read_token_impl(plain_json_Context *conte
             plain_json_intern_consume(context, 0);
 
             if (has_state(PLAIN_JSON_STATE_NEEDS_KEY)) {
-                token->key_start = context->buffer_offset;
+                token->key_start = context->_buffer_offset;
                 status = plain_json_intern_read_string(context, &token->key_length);
                 if (status != PLAIN_JSON_TRUE) {
                     return status;
@@ -675,7 +711,7 @@ static plain_json_ErrorType plain_json_read_token_impl(plain_json_Context *conte
                 continue;
 
             } else if (has_state( PLAIN_JSON_STATE_NEEDS_VALUE | PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE)) {
-                token->start = context->buffer_offset;
+                token->start = context->_buffer_offset;
                 token->type = PLAIN_JSON_TYPE_STRING;
                 status = plain_json_intern_read_string(context, &token->length);
 
@@ -715,7 +751,7 @@ static plain_json_ErrorType plain_json_read_token_impl(plain_json_Context *conte
             verify_state(PLAIN_JSON_STATE_NEEDS_VALUE | PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE);
             check_for_field_seperator();
 
-            token->start = context->buffer_offset;
+            token->start = context->_buffer_offset;
             token->type = PLAIN_JSON_TYPE_NUMBER;
             status = plain_json_intern_read_number(context, &token->length);
 
@@ -763,11 +799,11 @@ void plain_json_load_buffer(
 ) {
     context->line = 0;
     context->line_offset = 0;
-    context->depth_buffer_index = 0;
-    context->depth_buffer[0] = PLAIN_JSON_STATE_IS_ROOT;
+    context->_depth_buffer_index = 0;
+    context->_depth_buffer[0] = PLAIN_JSON_STATE_IS_ROOT;
 
-    context->buffer = buffer;
-    context->buffer_size = buffer_size;
+    context->_buffer = buffer;
+    context->_buffer_size = buffer_size;
 }
 
 #undef check_for_field_seperator
