@@ -14,7 +14,7 @@ TEST(parsing, string_escapes) {
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_TRUE);
     test_assert_eq(token.type, PLAIN_JSON_TYPE_STRING);
-    test_strcmp(context.buffer + token.start, "\\\"\\\\n\\r\\t\\f", token.length);
+    test_strcmp(text + token.start, "\\\"\\\\n\\r\\t\\f", token.length);
 
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_TRUE);
@@ -33,7 +33,7 @@ TEST(parsing, string_escapes_backslash) {
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_TRUE);
     test_assert_eq(token.type, PLAIN_JSON_TYPE_STRING);
-    test_strcmp(context.buffer + token.start, "\xEE\xBC\xB7", token.length);
+    test_strcmp(text + token.start, "\xEE\xBC\xB7", token.length);
 
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_TRUE);
@@ -51,7 +51,7 @@ TEST(parsing, string_escape_utf16) {
 
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_TRUE);
-    test_strcmp(context.buffer + token.start, "\\uaBcD", token.length);
+    test_strcmp(text + token.start, "\\uaBcD", token.length);
 
     status = plain_json_read_token(&context, &token);
     test_assert(status == PLAIN_JSON_TRUE);

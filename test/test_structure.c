@@ -12,7 +12,7 @@ TEST(structure, array_named) {
     test_assert_eq(status, PLAIN_JSON_TRUE);
 
     test_assert_eq(token.type, PLAIN_JSON_TYPE_ARRAY_START);
-    test_strcmp(context.buffer + token.key_start, "test_key", token.key_length);
+    test_strcmp(text + token.key_start, "test_key", token.key_length);
 
     status = plain_json_read_token(&context, &token);
     test_assert(status == PLAIN_JSON_TRUE);
@@ -32,17 +32,17 @@ TEST(structure, array_of_strings) {
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_TRUE);
     test_assert_eq(token.type, PLAIN_JSON_TYPE_STRING);
-    test_strcmp(context.buffer + token.start, "one", token.length);
+    test_strcmp(text + token.start, "one", token.length);
 
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_TRUE);
     test_assert_eq(token.type, PLAIN_JSON_TYPE_STRING);
-    test_strcmp(context.buffer + token.start, "two", token.length);
+    test_strcmp(text + token.start, "two", token.length);
 
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_TRUE);
     test_assert_eq(token.type, PLAIN_JSON_TYPE_STRING);
-    test_strcmp(context.buffer + token.start, "three", token.length);
+    test_strcmp(text + token.start, "three", token.length);
 
     status = plain_json_read_token(&context, &token);
     test_assert(status == PLAIN_JSON_TRUE);

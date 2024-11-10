@@ -75,7 +75,7 @@ static void print_error(plain_json_Context *context, plain_json_ErrorType type) 
     );
 }
 __attribute__((unused)) static void dump_state(plain_json_Context *context) {
-    int state = context->depth_buffer[context->depth_buffer_index];
+    int state = context->_depth_buffer[context->_depth_buffer_index];
     char *state_as_string = NULL;
     int bitcount = 0;
 
@@ -122,13 +122,13 @@ __attribute__((unused)) static void dump_state(plain_json_Context *context) {
 #define BUFFER_SIZE 512
 static void dump(plain_json_Context *context, plain_json_Token *token) {
     static int previous_depth = 0;
-    int depth = context->depth_buffer_index;
+    int depth = context->_depth_buffer_index;
 
-    if (context->depth_buffer_index > previous_depth) {
+    if (context->_depth_buffer_index > previous_depth) {
         depth--;
     }
 
-    previous_depth = context->depth_buffer_index;
+    previous_depth = context->_depth_buffer_index;
 
     for (int i = 0; i < depth; i++) {
         printf(" -- ");
@@ -140,7 +140,7 @@ static void dump(plain_json_Context *context, plain_json_Token *token) {
     if (token->key_length > 0) {
         memset(buffer, 0, sizeof(buffer) / sizeof(*buffer));
         memcpy(
-            buffer, context->buffer + token->key_start,
+            buffer, context->_buffer + token->key_start,
             (token->key_length <= BUFFER_SIZE) ? token->key_length : BUFFER_SIZE
         );
         printf(": \"%s\"", buffer);
@@ -149,7 +149,7 @@ static void dump(plain_json_Context *context, plain_json_Token *token) {
     if (token->length > 0) {
         memset(buffer, 0, sizeof(buffer) / sizeof(*buffer));
         memcpy(
-            buffer, context->buffer + token->start,
+            buffer, context->_buffer + token->start,
             (token->length <= BUFFER_SIZE) ? token->length : BUFFER_SIZE
         );
         printf(" = '%s'", buffer);
