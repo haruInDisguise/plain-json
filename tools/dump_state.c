@@ -15,10 +15,11 @@ static void print_error(plain_json_Context *context, plain_json_ErrorType type) 
         stderr, "error: %s at %d:%d\n", plain_json_error_to_string(type), context->line, context->line_offset
     );
 }
-__attribute__((unused)) static void dump_state(plain_json_Context *context) {
+__attribute__((unused)) static void dump_state(plain_json_Context *context, char *buffer, int buffer_size) {
     int state = context->_depth_buffer[context->_depth_buffer_index];
     char *state_as_string = NULL;
     int bitcount = 0;
+    int offset = 0;
 
     for (int i = 0; i < 31; i++) {
         int state_bit = state & (1 << i);
@@ -28,75 +29,67 @@ __attribute__((unused)) static void dump_state(plain_json_Context *context) {
         }
 
         if (bitcount > 0) {
-            printf(" | ");
+            offset += snprintf(buffer + offset, buffer_size - offset, " | ");
         }
         bitcount++;
 
         switch (state_bit) {
         case PLAIN_JSON_STATE_NEEDS_KEY:
-            state_as_string = "NEEDS_KEY";
+            state_as_string = "needs_key";
             break;
         case PLAIN_JSON_STATE_NEEDS_VALUE:
-            state_as_string = "NEEDS_VALUE";
+            state_as_string = "needs_value";
             break;
         case PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE:
-            state_as_string = "NEEDS_ARRAY_VALUE";
+            state_as_string = "needs_array_value";
             break;
-        case PLAIN_JSON_STATE_NEEDS_FIELD_SEPERATOR:
-            state_as_string = "NEEDS_FIELD_SEPERATOR";
+        case PLAIN_JSON_STATE_NEEDS_COMMA:
+            state_as_string = "needs_comma";
+            break;
+        case PLAIN_JSON_STATE_NEEDS_COLON:
+            state_as_string = "needs_colon";
             break;
         case PLAIN_JSON_STATE_IS_ROOT:
-            state_as_string = "IS_ROOT";
-            break;
-        case PLAIN_JSON_STATE_NEEDS_OBJECT_END:
-            state_as_string = "NEEDS_OBJECT_END";
-            break;
-        case PLAIN_JSON_STATE_NEEDS_ARRAY_END:
-            state_as_string = "NEEDS_ARRAY_END";
+            state_as_string = "is_root";
             break;
         }
 
-        printf("%s", state_as_string);
+        offset += snprintf(buffer + offset, buffer_size - offset, "%s", state_as_string);
     }
+
+    buffer[offset] = 0;
 }
 
 #define BUFFER_SIZE 512
+#define VALUE_BUFFER_SIZE 128
 static void dump(plain_json_Context *context, plain_json_Token *token) {
     static int previous_depth = 0;
-    int depth = context->_depth_buffer_index;
-
-    if (context->_depth_buffer_index > previous_depth) {
-        depth--;
-    }
-
+    int depth = (context->_depth_buffer_index > previous_depth) ? previous_depth : context->_depth_buffer_index;
     previous_depth = context->_depth_buffer_index;
 
-    for (int i = 0; i < depth; i++) {
-        printf(" -- ");
-    }
-
-    printf("%s", plain_json_type_to_string(token->type));
-
     char buffer[BUFFER_SIZE] = { 0 };
+    int offset = snprintf(buffer, BUFFER_SIZE, "[%d] %s", depth, plain_json_type_to_string(token->type));
+
+    char value_buffer[VALUE_BUFFER_SIZE] = {0};
     if (token->key_length > 0) {
-        memset(buffer, 0, sizeof(buffer) / sizeof(*buffer));
         memcpy(
-            buffer, context->_buffer + token->key_start,
-            (token->key_length <= BUFFER_SIZE) ? token->key_length : BUFFER_SIZE
+            value_buffer, context->_buffer + token->key_start,
+            (token->key_length <= VALUE_BUFFER_SIZE) ? token->key_length : VALUE_BUFFER_SIZE
         );
-        printf(": \"%s\"", buffer);
+        offset += snprintf(buffer + offset, VALUE_BUFFER_SIZE - offset, ": \"%s\"", value_buffer);
     }
 
     if (token->length > 0) {
-        memset(buffer, 0, sizeof(buffer) / sizeof(*buffer));
+        memset(value_buffer, 0, VALUE_BUFFER_SIZE);
         memcpy(
-            buffer, context->_buffer + token->start,
-            (token->length <= BUFFER_SIZE) ? token->length : BUFFER_SIZE
+            value_buffer, context->_buffer + token->start,
+            (token->length <= VALUE_BUFFER_SIZE) ? token->length : VALUE_BUFFER_SIZE
         );
-        printf(" = '%s'", buffer);
+        offset += snprintf(buffer + offset, BUFFER_SIZE - offset, " = '%s'", value_buffer);
     }
 
-    printf("\n");
+    dump_state(context, value_buffer, VALUE_BUFFER_SIZE);
+    printf("%-40s%s\n", buffer, value_buffer);
 }
 
 #define TOKEN_PAGE_SIZE 256
@@ -105,15 +98,16 @@ int parse_json(char *buffer, unsigned long long buffer_size) {
     plain_json_load_buffer(&context, buffer, buffer_size);
     int status = PLAIN_JSON_HAS_REMAINING;
 
-#if 0
+#if 1
     plain_json_Token token;
-    while ((status = plain_json_read_token(&context, &token)) == PLAIN_JSON_TRUE) {
-        if (status != PLAIN_JSON_TRUE && status != PLAIN_JSON_FALSE) {
-            print_error(&context, status);
-            return -1;
-        }
+    while ((status = plain_json_read_token(&context, &token)) == PLAIN_JSON_HAS_REMAINING) {
 
         dump(&context, &token);
+    }
+
+    if (status != PLAIN_JSON_HAS_REMAINING && status != PLAIN_JSON_DONE) {
+        print_error(&context, status);
+        return -1;
     }
 #else
     plain_json_Token *tokens = malloc(TOKEN_PAGE_SIZE * sizeof(*tokens));
@@ -128,6 +122,7 @@ int parse_json(char *buffer, unsigned long long buffer_size) {
 
     for (int i = 0; i < tokens_read; i++) {
         dump(&context, tokens + i);
+        dump_state(&context);
     }
 
     free(tokens);
