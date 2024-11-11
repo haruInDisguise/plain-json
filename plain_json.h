@@ -5,15 +5,13 @@
     #define PLAIN_JSON_OPTION_MAX_DEPTH 32
 #endif
 
-#define PLAIN_JSON_STATE_IS_ROOT 0x01
+#define PLAIN_JSON_STATE_IS_ROOT               0x01
 
 #define PLAIN_JSON_STATE_NEEDS_KEY             0x02
-#define PLAIN_JSON_STATE_NEEDS_FIELD_SEPERATOR 0x04
+#define PLAIN_JSON_STATE_NEEDS_COMMA           0x04
 #define PLAIN_JSON_STATE_NEEDS_VALUE           0x08
 #define PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE     0x10
-
-#define PLAIN_JSON_STATE_NEEDS_OBJECT_END 0x20
-#define PLAIN_JSON_STATE_NEEDS_ARRAY_END  0x40
+#define PLAIN_JSON_STATE_NEEDS_COLON           0x20
 
 typedef enum {
     PLAIN_JSON_DONE,
@@ -28,11 +26,11 @@ typedef enum {
     PLAIN_JSON_ERROR_NUMBER_INVALID,
     PLAIN_JSON_ERROR_KEYWORD_INVALID,
 
-    PLAIN_JSON_ERROR_MISSING_FIELD_SEPERATOR,
+    PLAIN_JSON_ERROR_MISSING_COMMA,
     PLAIN_JSON_ERROR_NESTING_TOO_DEEP,
 
     PLAIN_JSON_ERROR_UNEXPECTED_EOF,
-    PLAIN_JSON_ERROR_UNEXPECTED_FIELD_SEPERATOR,
+    PLAIN_JSON_ERROR_UNEXPECTED_COMMA,
     PLAIN_JSON_ERROR_UNEXPECTED_ROOT,
     PLAIN_JSON_ERROR_UNEXPECTED_TOKEN,
 } plain_json_ErrorType;
@@ -91,10 +89,8 @@ typedef struct {
     unsigned int _buffer_size;
     unsigned int _buffer_offset;
 
-    unsigned char _depth_buffer_index;
-    unsigned char _depth_buffer[PLAIN_JSON_OPTION_MAX_DEPTH];
-    /* FIXME: Find a nicer workaround for empty arrays/objects */
-    int _last_token_type;
+    unsigned short _depth_buffer_index;
+    unsigned short _depth_buffer[PLAIN_JSON_OPTION_MAX_DEPTH];
 
     int line;
     int line_offset;
@@ -553,21 +549,29 @@ done:
     return PLAIN_JSON_HAS_REMAINING;
 }
 
+/* TODO: At this point, I might aswell use a lookup table */
 #define get_state()      context->_depth_buffer[context->_depth_buffer_index]
 #define set_state(state) (get_state() = (state))
 #define has_state(state) ((get_state() & (state)) > 0)
+#define add_state(state) (set_state(get_state() & (state)))
+#define remove_state(state) (set_state(get_state() ^ (state)))
 
 /* A comma preceeding this token must have been read beforehand */
-#define check_for_field_seperator()                                   \
-    if ((get_state() & PLAIN_JSON_STATE_NEEDS_FIELD_SEPERATOR) > 0) { \
-        return PLAIN_JSON_ERROR_MISSING_FIELD_SEPERATOR;              \
+#define check_for_comma()                                   \
+    if ((get_state() & PLAIN_JSON_STATE_NEEDS_COMMA) > 0) { \
+        return PLAIN_JSON_ERROR_MISSING_COMMA;              \
     }
 
 /* For this token to be valid, parts of 'state' must match the current state */
-#define verify_state(state)                       \
-    if ((get_state() & (state)) == 0) {           \
+#define check_state(state)                       \
+    if (!has_state(state)) {           \
         return PLAIN_JSON_ERROR_UNEXPECTED_TOKEN; \
     }
+#define check_state_exact(state)                       \
+    if (get_state() != (state)) {           \
+        return PLAIN_JSON_ERROR_UNEXPECTED_TOKEN; \
+    }
+
 
 #define push_state()                                                     \
     if (context->_depth_buffer_index + 1 < PLAIN_JSON_OPTION_MAX_DEPTH) { \
@@ -584,9 +588,12 @@ done:
     }
 
 static plain_json_ErrorType plain_json_read_token_impl(plain_json_Context *context, plain_json_Token *token) {
+    /* FIXME: My terminology is inconsistent and partially wrong. */
+    /* Indicate if this value is prefixed by a comma. Objects/Array can be
+     * empty, meaning we can't rely on the state to tell us is if a comma
+     * has been processed. */
+    int has_comma = 0;
     int status = PLAIN_JSON_HAS_REMAINING;
-    int pre_key_state = 0;
-
     plain_json_intern_token_reset(context, token);
 
     while (plain_json_intern_has_next(context, 0)) {
@@ -600,92 +607,90 @@ static plain_json_ErrorType plain_json_read_token_impl(plain_json_Context *conte
         switch (current_char) {
         case '{':
             /* The file root may contain object/arrays */
-            verify_state(
+            check_state(
                 PLAIN_JSON_STATE_NEEDS_VALUE | PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE |
                 PLAIN_JSON_STATE_IS_ROOT
             );
-            check_for_field_seperator();
+            check_for_comma();
 
             token->type = PLAIN_JSON_TYPE_OBJECT_START;
             plain_json_intern_consume(context, 0);
 
-            if (has_state(PLAIN_JSON_STATE_NEEDS_VALUE)) {
-                set_state(pre_key_state);
-            }
+            if(has_state(PLAIN_JSON_STATE_NEEDS_VALUE))
+                set_state(PLAIN_JSON_STATE_NEEDS_KEY);
+            set_state(get_state() | PLAIN_JSON_STATE_NEEDS_COMMA);
 
             push_state();
-            set_state(PLAIN_JSON_STATE_NEEDS_KEY | PLAIN_JSON_STATE_NEEDS_OBJECT_END);
+            set_state(PLAIN_JSON_STATE_NEEDS_KEY);
             goto has_token;
         case '}':
-            verify_state(PLAIN_JSON_STATE_NEEDS_KEY | PLAIN_JSON_STATE_NEEDS_OBJECT_END);
+            check_state(PLAIN_JSON_STATE_NEEDS_KEY);
+            if(has_comma)
+                return PLAIN_JSON_ERROR_UNEXPECTED_COMMA;
 
             token->type = PLAIN_JSON_TYPE_OBJECT_END;
             plain_json_intern_consume(context, 0);
-
-            /* Handle leading commas and allow empty objects */
-            if (context->_last_token_type != PLAIN_JSON_TYPE_OBJECT_START &&
-                !has_state(PLAIN_JSON_STATE_NEEDS_FIELD_SEPERATOR)) {
-                return PLAIN_JSON_ERROR_UNEXPECTED_TOKEN;
-            }
 
             pop_state();
 
             /* Objects can occur at root level */
             if (!has_state(PLAIN_JSON_STATE_IS_ROOT)) {
-                set_state(get_state() | PLAIN_JSON_STATE_NEEDS_FIELD_SEPERATOR);
+                set_state(get_state() | PLAIN_JSON_STATE_NEEDS_COMMA);
             }
 
             goto has_token;
         case '[':
-            verify_state(
+            check_state(
                 PLAIN_JSON_STATE_NEEDS_VALUE | PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE |
                 PLAIN_JSON_STATE_IS_ROOT
             );
-            check_for_field_seperator();
+            check_for_comma();
 
             token->type = PLAIN_JSON_TYPE_ARRAY_START;
             plain_json_intern_consume(context, 0);
 
-            if (has_state(PLAIN_JSON_STATE_NEEDS_VALUE)) {
-                set_state(pre_key_state);
-            }
+            if(has_state(PLAIN_JSON_STATE_NEEDS_VALUE))
+                set_state(PLAIN_JSON_STATE_NEEDS_KEY);
+            set_state(get_state() | PLAIN_JSON_STATE_NEEDS_COMMA);
 
             push_state();
             set_state(PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE);
             goto has_token;
         case ']':
-            verify_state(PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE);
+            check_state(PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE);
+            if(has_comma)
+                return PLAIN_JSON_ERROR_UNEXPECTED_COMMA;
 
             token->type = PLAIN_JSON_TYPE_ARRAY_END;
             plain_json_intern_consume(context, 0);
-
-            /* Handle leading commas and allow empty arrays */
-            if (context->_last_token_type != PLAIN_JSON_TYPE_ARRAY_START &&
-                !has_state(PLAIN_JSON_STATE_NEEDS_FIELD_SEPERATOR)) {
-                return PLAIN_JSON_ERROR_UNEXPECTED_TOKEN;
-            }
 
             pop_state();
 
             /* Arrays are special values since they can occur at root */
             if (!has_state(PLAIN_JSON_STATE_IS_ROOT)) {
-                set_state(get_state() | PLAIN_JSON_STATE_NEEDS_FIELD_SEPERATOR);
+                set_state(get_state() | PLAIN_JSON_STATE_NEEDS_COMMA);
             }
 
             goto has_token;
         case ',':
-            verify_state(PLAIN_JSON_STATE_NEEDS_FIELD_SEPERATOR);
+            check_state(PLAIN_JSON_STATE_NEEDS_COMMA);
 
+            has_comma = 1;
             plain_json_intern_consume(context, 0);
-            set_state(get_state() ^ PLAIN_JSON_STATE_NEEDS_FIELD_SEPERATOR);
+            remove_state(PLAIN_JSON_STATE_NEEDS_COMMA);
 
+            continue;
+        case ':':
+            check_state_exact(PLAIN_JSON_STATE_NEEDS_COLON);
+            plain_json_intern_consume(context, 0);
+            set_state(PLAIN_JSON_STATE_NEEDS_VALUE);
             continue;
         /* A '"' can mean one of the following:
          *   1. The key of a value
          *   2. A string as a value
          *   3. A string as an array value */
         case '"':
-            check_for_field_seperator();
+            check_for_comma();
             plain_json_intern_consume(context, 0);
 
             if (has_state(PLAIN_JSON_STATE_NEEDS_KEY)) {
@@ -695,19 +700,7 @@ static plain_json_ErrorType plain_json_read_token_impl(plain_json_Context *conte
                     return status;
                 }
 
-                plain_json_intern_read_blanks(context);
-                /* Keys must be followed by a colon */
-                if (plain_json_intern_peek(context, 0) != ':') {
-                    return PLAIN_JSON_ERROR_UNEXPECTED_TOKEN;
-                }
-                plain_json_intern_consume(context, 0);
-
-                /* Keys are only vaild inside objects and must be followed by a value.
-                 * The key is read as part of its value token and consequently override the
-                 * current state. The state prior to reading the key is stored so we can
-                 * restore it after parsing its value. */
-                pre_key_state = get_state();
-                set_state(PLAIN_JSON_STATE_NEEDS_VALUE);
+                set_state(PLAIN_JSON_STATE_NEEDS_COLON);
                 continue;
 
             } else if (has_state( PLAIN_JSON_STATE_NEEDS_VALUE | PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE)) {
@@ -715,12 +708,10 @@ static plain_json_ErrorType plain_json_read_token_impl(plain_json_Context *conte
                 token->type = PLAIN_JSON_TYPE_STRING;
                 status = plain_json_intern_read_string(context, &token->length);
 
-                if (get_state() == PLAIN_JSON_STATE_NEEDS_VALUE) {
-                    set_state(pre_key_state);
-                }
+                if(has_state(PLAIN_JSON_STATE_NEEDS_VALUE))
+                    set_state(PLAIN_JSON_STATE_NEEDS_KEY);
 
-                set_state(get_state() | PLAIN_JSON_STATE_NEEDS_FIELD_SEPERATOR);
-
+                set_state(get_state() | PLAIN_JSON_STATE_NEEDS_COMMA);
                 goto has_token;
             }
 
@@ -734,31 +725,26 @@ static plain_json_ErrorType plain_json_read_token_impl(plain_json_Context *conte
         case 'f':
             token->type = PLAIN_JSON_TYPE_FALSE;
         read_keyword:
-            verify_state(PLAIN_JSON_STATE_NEEDS_VALUE | PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE);
-            check_for_field_seperator();
+            check_state(PLAIN_JSON_STATE_NEEDS_VALUE | PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE);
+            check_for_comma();
 
             status = plain_json_intern_read_keyword(context, token->type, &token->length);
 
-            if (get_state() == PLAIN_JSON_STATE_NEEDS_VALUE) {
-                set_state(pre_key_state);
-            }
-            set_state(get_state() | PLAIN_JSON_STATE_NEEDS_FIELD_SEPERATOR);
+            if(has_state(PLAIN_JSON_STATE_NEEDS_VALUE))
+                set_state(PLAIN_JSON_STATE_NEEDS_KEY);
+            set_state(get_state() | PLAIN_JSON_STATE_NEEDS_COMMA);
 
             goto has_token;
         }
 
         if (is_digit(current_char) || current_char == '-' || current_char == '+') {
-            verify_state(PLAIN_JSON_STATE_NEEDS_VALUE | PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE);
-            check_for_field_seperator();
+            check_state(PLAIN_JSON_STATE_NEEDS_VALUE | PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE);
+            check_for_comma();
 
             token->start = context->_buffer_offset;
             token->type = PLAIN_JSON_TYPE_NUMBER;
             status = plain_json_intern_read_number(context, &token->length);
-
-            if (get_state() == PLAIN_JSON_STATE_NEEDS_VALUE) {
-                set_state(pre_key_state);
-            }
-            set_state(get_state() | PLAIN_JSON_STATE_NEEDS_FIELD_SEPERATOR);
+            set_state(get_state() | PLAIN_JSON_STATE_NEEDS_COMMA);
 
             goto has_token;
         }
@@ -775,7 +761,6 @@ is_eof:
     status = PLAIN_JSON_ERROR_UNEXPECTED_EOF;
 
 has_token:
-    context->_last_token_type = token->type;
     return status;
 }
 
@@ -804,7 +789,7 @@ void plain_json_load_buffer(
     context->_buffer_size = buffer_size;
 }
 
-#undef check_for_field_seperator
+#undef check_for_comma
 #undef verify_state
 #undef has_state
 #undef push_state

@@ -160,7 +160,7 @@ TEST(structure_malformed, array_trailing_comma) {
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_ERROR_UNEXPECTED_TOKEN);
+    test_assert_eq(status, PLAIN_JSON_ERROR_UNEXPECTED_COMMA);
 }
 
 TEST(structure_malformed, root_unexpected) {
@@ -199,7 +199,7 @@ TEST(structure_malformed, object_trailing_comma) {
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_ERROR_UNEXPECTED_TOKEN);
+    test_assert_eq(status, PLAIN_JSON_ERROR_UNEXPECTED_COMMA);
 }
 
 TEST(structure_malformed, root_value) {
@@ -233,7 +233,7 @@ TEST(structure_malformed, array_comma_missing) {
     test_assert(status == PLAIN_JSON_HAS_REMAINING);
 
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_ERROR_MISSING_FIELD_SEPERATOR);
+    test_assert(status == PLAIN_JSON_ERROR_MISSING_COMMA);
 }
 
 TEST(structure_malformed, object_nested_comma_missing) {
@@ -251,7 +251,7 @@ TEST(structure_malformed, object_nested_comma_missing) {
     test_assert(status == PLAIN_JSON_HAS_REMAINING);
 
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_ERROR_MISSING_FIELD_SEPERATOR);
+    test_assert(status == PLAIN_JSON_ERROR_MISSING_COMMA);
 }
 
 TEST(structure_malformed, object_comma_missing) {
@@ -264,7 +264,7 @@ TEST(structure_malformed, object_comma_missing) {
     test_assert(status == PLAIN_JSON_HAS_REMAINING);
 
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_ERROR_MISSING_FIELD_SEPERATOR);
+    test_assert(status == PLAIN_JSON_ERROR_MISSING_COMMA);
 }
 
 TEST(structure, array_of_objects_comma_missing) {
@@ -280,7 +280,7 @@ TEST(structure, array_of_objects_comma_missing) {
     }
 
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_ERROR_MISSING_FIELD_SEPERATOR);
+    test_assert(status == PLAIN_JSON_ERROR_MISSING_COMMA);
 }
 
 TEST(structure, array_of_arrays_comma_missing) {
@@ -296,5 +296,5 @@ TEST(structure, array_of_arrays_comma_missing) {
     }
 
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_ERROR_MISSING_FIELD_SEPERATOR);
+    test_assert(status == PLAIN_JSON_ERROR_MISSING_COMMA);
 }

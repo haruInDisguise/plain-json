@@ -3,7 +3,7 @@
 
 SUIT(parsing, test_reset_context, NULL);
 
-TEST(parsing, string_escapes) {
+TEST(parsing, string_escape) {
     const char *text = "[\"\\\"\\\\n\\r\\t\\f\"]";
 
     plain_json_load_buffer(&context, text, strlen(text));
@@ -22,7 +22,8 @@ TEST(parsing, string_escapes) {
     test_assert_eq(status, PLAIN_JSON_DONE);
 }
 
-TEST(parsing, string_escapes_backslash) {
+// FIXME: What is the point of this test?
+TEST(parsing, string_escape_backslash) {
     const char *text = "[\"\xEE\xBC\xB7\"]";
 
     plain_json_load_buffer(&context, text, strlen(text));
