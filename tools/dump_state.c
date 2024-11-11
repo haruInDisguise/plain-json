@@ -98,7 +98,7 @@ int parse_json(char *buffer, unsigned long long buffer_size) {
     plain_json_load_buffer(&context, buffer, buffer_size);
     int status = PLAIN_JSON_HAS_REMAINING;
 
-#if 1
+#if 0
     plain_json_Token token;
     while ((status = plain_json_read_token(&context, &token)) == PLAIN_JSON_HAS_REMAINING) {
 
@@ -122,7 +122,6 @@ int parse_json(char *buffer, unsigned long long buffer_size) {
 
     for (int i = 0; i < tokens_read; i++) {
         dump(&context, tokens + i);
-        dump_state(&context);
     }
 
     free(tokens);

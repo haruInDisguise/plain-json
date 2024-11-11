@@ -6,8 +6,8 @@ LDFLAGS =
 BUILD_CONFIG ?= debug
 
 ifeq ($(BUILD_CONFIG),debug)
-CFLAGS += -DJSON_DEBUG -O0 -gdwarf-5 -fno-omit-frame-pointer -fsanitize=undefined,address --coverage
-LDFLAGS += -fsanitize=undefined,address --coverage
+CFLAGS += -DJSON_DEBUG -O0 -gdwarf-5 -fno-omit-frame-pointer -fsanitize=undefined,address
+LDFLAGS += -fsanitize=undefined,address
 
 else ifeq ($(BUILD_CONFIG),release)
 CFLAGS += -O3
@@ -19,10 +19,6 @@ endif
 BUILD_DIR = build
 INC_PATH = plain_json.h
 
-DEBUG_BIN = $(BUILD_DIR)/dump_state
-DEBUG_SRC = tools/dump_state.c
-DEBUG_OBJ := $(patsubst %.c,$(BUILD_DIR)/%.o,$(DEBUG_SRC))
-
 TEST_BIN = $(BUILD_DIR)/run_tests
 TEST_SRC = test/test_main.c \
 		   test/test_structure.c \
@@ -30,13 +26,21 @@ TEST_SRC = test/test_main.c \
 		   test/test_utf8.c
 TEST_OBJ := $(patsubst %.c,$(BUILD_DIR)/%.o,$(TEST_SRC))
 
-DEP := $(patsubst %.c,$(BUILD_DIR)/%.d,$(TEST_SRC) $(DEBUG_SRC))
+DEP := $(patsubst %.c,$(BUILD_DIR)/%.d,$(TEST_SRC) $(TOOLS_SRC))
 
-all: build_tests build_bin
+all: build/json_test_suit build/dump_state build/run_tests
 
-build_bin: $(DEBUG_BIN)
+build/json_test_suit: tools/json_test_suit.c $(INC)
+	@mkdir -p $(dir $@)
+	$(CC) $(LDFLAGS) tools/json_test_suit.c -o $@
 
-build_tests: $(TEST_BIN)
+build/dump_state: tools/dump_state.c $(INC)
+	@mkdir -p $(dir $@)
+	$(CC) $(LDFLAGS) tools/dump_state.c -o $@
+
+build/run_tests: $(TEST_OBJ)
+	@mkdir -p $(dir $@)
+	$(CC) $(LDFLAGS) $(TEST_OBJ) -o $@
 
 dev: clean
 	@mkdir -p $(BUILD_DIR)
@@ -50,12 +54,6 @@ clean:
 
 # ----
 
-$(TEST_BIN): $(DEP) $(TEST_OBJ)
-	$(CC) $(LDFLAGS) $(TEST_OBJ) -o $@
-
-$(DEBUG_BIN): $(DEP) $(DEBUG_OBJ)
-	$(CC) $(LDFLAGS) $(DEBUG_OBJ) -o $@
-
 -include $(DEP)
 
 $(DEP): $(BUILD_DIR)/%.d: %.c $(INC_PATH)
@@ -63,7 +61,6 @@ $(DEP): $(BUILD_DIR)/%.d: %.c $(INC_PATH)
 	@$(CC) $(CFLAGS) $< -MM | \
 		sed 's#$(notdir $*)\.o[ :]*#$(BUILD_PATH)/$*.o $(BUILD_PATH)/$*.d: #g' > $@
 
-$(TEST_OBJ) $(DEBUG_OBJ): $(BUILD_DIR)/%.o: %.c $(INC_PATH)
+$(TEST_OBJ): $(BUILD_DIR)/%.o: %.c $(TEST_SRC) $(INC_PATH)
 	@mkdir -p $(dir $@)
 	$(CC) -c $(CFLAGS) $< -o $@
-
