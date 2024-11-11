@@ -9,17 +9,17 @@ TEST(parsing, string_escapes) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
 
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     test_assert_eq(token.type, PLAIN_JSON_TYPE_STRING);
     test_strcmp(text + token.start, "\\\"\\\\n\\r\\t\\f", token.length);
 
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_FALSE);
+    test_assert_eq(status, PLAIN_JSON_DONE);
 }
 
 TEST(parsing, string_escapes_backslash) {
@@ -28,17 +28,17 @@ TEST(parsing, string_escapes_backslash) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
 
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     test_assert_eq(token.type, PLAIN_JSON_TYPE_STRING);
     test_strcmp(text + token.start, "\xEE\xBC\xB7", token.length);
 
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_FALSE);
+    test_assert_eq(status, PLAIN_JSON_DONE);
 }
 
 TEST(parsing, string_escape_utf16) {
@@ -47,16 +47,16 @@ TEST(parsing, string_escape_utf16) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
 
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     test_strcmp(text + token.start, "\\uaBcD", token.length);
 
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_TRUE);
+    test_assert(status == PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_FALSE);
+    test_assert(status == PLAIN_JSON_DONE);
 }
 
 TEST(parsing, keywords) {
@@ -65,22 +65,22 @@ TEST(parsing, keywords) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
 
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     test_assert_eq(token.type, PLAIN_JSON_TYPE_NULL);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     test_assert_eq(token.type, PLAIN_JSON_TYPE_TRUE);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     test_assert_eq(token.type, PLAIN_JSON_TYPE_FALSE);
 
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_TRUE);
+    test_assert(status == PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_FALSE);
+    test_assert(status == PLAIN_JSON_DONE);
 }
 
 SUIT(parsing_malformed, test_reset_context, NULL);
@@ -91,7 +91,7 @@ TEST(parsing_malformed, string_unterminated) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
     test_assert(status == PLAIN_JSON_ERROR_STRING_UNTERMINATED);
 }
@@ -102,7 +102,7 @@ TEST(parsing_malformed, string_eof) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
     test_assert(status == PLAIN_JSON_ERROR_UNEXPECTED_EOF);
 }
@@ -112,7 +112,7 @@ TEST(parsing_malformed, string_control) {
 
     plain_json_load_buffer(&context, text, strlen(text));
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_ERROR_STRING_INVALID_ASCII);
 }
@@ -123,7 +123,7 @@ TEST(parsing_malformed, string_escape_utf16) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
 
     status = plain_json_read_token(&context, &token);
     test_assert(status == PLAIN_JSON_ERROR_STRING_INVALID_UTF16_ESCAPE);
@@ -135,7 +135,7 @@ TEST(parsing_malformed, string_escape_utf16_incomplete) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
 
     status = plain_json_read_token(&context, &token);
     test_assert(status == PLAIN_JSON_ERROR_STRING_INVALID_UTF16_ESCAPE);
@@ -147,7 +147,7 @@ TEST(parsing_malformed, keywords_invalid) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
 
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_ERROR_UNEXPECTED_TOKEN);
@@ -159,7 +159,7 @@ TEST(parsing_malformed, keyword_invalid_true) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
 
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_ERROR_KEYWORD_INVALID);
@@ -171,7 +171,7 @@ TEST(parsing_malformed, keyword_invalid_null) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
 
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_ERROR_KEYWORD_INVALID);
@@ -183,7 +183,7 @@ TEST(parsing_malformed, keyword_invalid_false) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
 
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_ERROR_KEYWORD_INVALID);
@@ -195,17 +195,17 @@ TEST(parsing, number_zero) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_FALSE);
+    test_assert_eq(status, PLAIN_JSON_DONE);
 }
 
 
@@ -215,15 +215,15 @@ TEST(parsing, number_integer) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_FALSE);
+    test_assert_eq(status, PLAIN_JSON_DONE);
 }
 
 TEST(parsing, number_float) {
@@ -232,15 +232,15 @@ TEST(parsing, number_float) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_FALSE);
+    test_assert_eq(status, PLAIN_JSON_DONE);
 }
 
 TEST(parsing, number_expo) {
@@ -249,13 +249,13 @@ TEST(parsing, number_expo) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_FALSE);
+    test_assert_eq(status, PLAIN_JSON_DONE);
 }
 
 TEST(parsing, number_expo_sign) {
@@ -264,15 +264,15 @@ TEST(parsing, number_expo_sign) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_FALSE);
+    test_assert_eq(status, PLAIN_JSON_DONE);
 }
 
 TEST(parsing_malformed, number_leading_zero) {
@@ -281,7 +281,7 @@ TEST(parsing_malformed, number_leading_zero) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_ERROR_NUMBER_INVALID);
 }
@@ -292,7 +292,7 @@ TEST(parsing_malformed, number_float) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_ERROR_NUMBER_INVALID);
 }
@@ -303,7 +303,7 @@ TEST(parsing_malformed, number_expo_double_dot) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_ERROR_NUMBER_INVALID);
 }
@@ -314,7 +314,7 @@ TEST(parsing_malformed, number_expo_no_decimal) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_ERROR_NUMBER_INVALID);
 }
@@ -325,7 +325,7 @@ TEST(parsing_malformed, number_expo_double_sign) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_ERROR_NUMBER_INVALID);
 }
@@ -336,7 +336,7 @@ TEST(parsing_malformed, number_expo_trailing_sign) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_ERROR_NUMBER_INVALID);
 }
@@ -347,7 +347,7 @@ TEST(parsing_malformed, number_starting_plus) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_ERROR_NUMBER_INVALID);
 }
@@ -358,7 +358,7 @@ TEST(parsing_malformed, number_double_sign) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_ERROR_NUMBER_INVALID);
 }

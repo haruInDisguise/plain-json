@@ -8,70 +8,11 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 
-#define PLAIN_JSON_IMPLEMENTATION
-#include "../plain_json.h"
-
-static const char *token_type_to_string(plain_json_Type type) {
-    switch (type) {
-    case PLAIN_JSON_TYPE_INVALID:
-        return "invalid";
-    case PLAIN_JSON_TYPE_ERROR:
-        return "error";
-    case PLAIN_JSON_TYPE_OBJECT_START:
-        return "object_start";
-    case PLAIN_JSON_TYPE_OBJECT_END:
-        return "object_end";
-    case PLAIN_JSON_TYPE_ARRAY_START:
-        return "array_start";
-    case PLAIN_JSON_TYPE_ARRAY_END:
-        return "array_end";
-    case PLAIN_JSON_TYPE_STRING:
-        return "string";
-    case PLAIN_JSON_TYPE_NUMBER:
-        return "integer";
-    case PLAIN_JSON_TYPE_NULL:
-        return "null";
-    case PLAIN_JSON_TYPE_FALSE:
-        return "false";
-    case PLAIN_JSON_TYPE_TRUE:
-        return "true";
-    }
-
-    return "invalid";
-}
-
-static const char *error_to_string(plain_json_ErrorType type) {
-    switch (type) {
-    case PLAIN_JSON_ERROR_NUMBER_INVALID:
-        return "error_number_invalid";
-    case PLAIN_JSON_ERROR_STRING_INVALID_ASCII:
-        return "error_string_invalid_ascii";
-    case PLAIN_JSON_ERROR_STRING_INVALID_UTF8:
-        return "error_string_invalid_utf8";
-    case PLAIN_JSON_ERROR_STRING_UNTERMINATED:
-        return "error_string_unterminated";
-    case PLAIN_JSON_ERROR_NO_MEMORY:
-        return "error_no_memory";
-    case PLAIN_JSON_ERROR_TOO_DEEP:
-        return "error_too_deep";
-    case PLAIN_JSON_ERROR_IS_ROOT:
-        return "error_is_root";
-    case PLAIN_JSON_ERROR_UNEXPECTED_TOKEN:
-        return "error_unexpected_token";
-    case PLAIN_JSON_ERROR_KEYWORD_INVALID:
-        return "error_keyword_invalid";
-    case PLAIN_JSON_ERROR_MISSING_FIELD_SEPERATOR:
-        return "error_missing_field_seperator";
-    default:
-        break;
-    }
-
-    return "unknown error";
-}
+#include "json_common.h"
 
 static void print_error(plain_json_Context *context, plain_json_ErrorType type) {
     fprintf(
-        stderr, "error: %s at %d:%d\n", error_to_string(type), context->line, context->line_offset
+        stderr, "error: %s at %d:%d\n", plain_json_error_to_string(type), context->line, context->line_offset
     );
 }
 __attribute__((unused)) static void dump_state(plain_json_Context *context) {
@@ -134,7 +75,7 @@ static void dump(plain_json_Context *context, plain_json_Token *token) {
         printf(" -- ");
     }
 
-    printf("%s", token_type_to_string(token->type));
+    printf("%s", plain_json_type_to_string(token->type));
 
     char buffer[BUFFER_SIZE] = { 0 };
     if (token->key_length > 0) {
@@ -162,7 +103,7 @@ static void dump(plain_json_Context *context, plain_json_Token *token) {
 int parse_json(char *buffer, unsigned long long buffer_size) {
     plain_json_Context context = { 0 };
     plain_json_load_buffer(&context, buffer, buffer_size);
-    int status = PLAIN_JSON_TRUE;
+    int status = PLAIN_JSON_HAS_REMAINING;
 
 #if 0
     plain_json_Token token;
@@ -179,7 +120,7 @@ int parse_json(char *buffer, unsigned long long buffer_size) {
     int tokens_read = 0;
 
     status = plain_json_read_token_buffered(&context, tokens, TOKEN_PAGE_SIZE, &tokens_read);
-    if (status != PLAIN_JSON_TRUE && status != PLAIN_JSON_FALSE) {
+    if (status != PLAIN_JSON_HAS_REMAINING && status != PLAIN_JSON_DONE) {
         print_error(&context, status);
         free(tokens);
         return -1;

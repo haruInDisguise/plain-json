@@ -2,14 +2,14 @@
 
 SUIT(utf8, test_reset_context, NULL);
 
-#define TEST_INVALID_UTF8(name, result, codepoint)                 \
-    TEST(utf8, name) {                                             \
-        char *text = "[\"" codepoint "\"]";                        \
-        plain_json_load_buffer(&context, text, strlen(text));            \
+#define TEST_INVALID_UTF8(name, result, codepoint)                             \
+    TEST(utf8, name) {                                                         \
+        char *text = "[\"" codepoint "\"]";                                    \
+        plain_json_load_buffer(&context, text, strlen(text));                  \
         plain_json_ErrorType status = plain_json_read_token(&context, &token); \
-        test_assert_eq(status, PLAIN_JSON_TRUE);                         \
-        status = plain_json_read_token(&context, &token);                \
-        test_assert_eq(status, result);                            \
+        test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);                      \
+        status = plain_json_read_token(&context, &token);                      \
+        test_assert_eq(status, result);                                        \
     }
 
 TEST_INVALID_UTF8(two_invalid_first_byte, PLAIN_JSON_ERROR_STRING_INVALID_UTF8, "\xDF\xCF")
@@ -33,19 +33,19 @@ TEST(utf8, valid) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
 
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_TRUE);
+    test_assert(status == PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_TRUE);
+    test_assert(status == PLAIN_JSON_HAS_REMAINING);
 
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_TRUE);
+    test_assert(status == PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_FALSE);
+    test_assert(status == PLAIN_JSON_DONE);
 }
 
 #undef TEST_INVALID_UTF8

@@ -7,19 +7,19 @@ TEST(structure, array_named) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
 
     test_assert_eq(token.type, PLAIN_JSON_TYPE_ARRAY_START);
     test_strcmp(text + token.key_start, "test_key", token.key_length);
 
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_TRUE);
+    test_assert(status == PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_TRUE);
+    test_assert(status == PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_FALSE);
+    test_assert(status == PLAIN_JSON_DONE);
 }
 
 TEST(structure, array_of_strings) {
@@ -27,27 +27,27 @@ TEST(structure, array_of_strings) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
 
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     test_assert_eq(token.type, PLAIN_JSON_TYPE_STRING);
     test_strcmp(text + token.start, "one", token.length);
 
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     test_assert_eq(token.type, PLAIN_JSON_TYPE_STRING);
     test_strcmp(text + token.start, "two", token.length);
 
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     test_assert_eq(token.type, PLAIN_JSON_TYPE_STRING);
     test_strcmp(text + token.start, "three", token.length);
 
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_TRUE);
+    test_assert(status == PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_FALSE);
+    test_assert(status == PLAIN_JSON_DONE);
 }
 
 TEST(structure, array_empty) {
@@ -56,11 +56,11 @@ TEST(structure, array_empty) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_TRUE);
+    test_assert(status == PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_TRUE);
+    test_assert(status == PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_FALSE);
+    test_assert(status == PLAIN_JSON_DONE);
 }
 
 TEST(structure, array_of_objects) {
@@ -71,12 +71,12 @@ TEST(structure, array_of_objects) {
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
 
     for (int i = 0; i < 8; i++) {
-        test_assert(status == PLAIN_JSON_TRUE);
+        test_assert(status == PLAIN_JSON_HAS_REMAINING);
         status = plain_json_read_token(&context, &token);
     }
 
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_FALSE);
+    test_assert(status == PLAIN_JSON_DONE);
 }
 
 TEST(structure, array_deeply_nested) {
@@ -85,11 +85,11 @@ TEST(structure, array_deeply_nested) {
 
     for (uint32_t i = 0; i < 62; i++) {
         plain_json_ErrorType status = plain_json_read_token(&context, &token);
-        test_assert(status == PLAIN_JSON_TRUE);
+        test_assert(status == PLAIN_JSON_HAS_REMAINING);
     }
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_FALSE);
+    test_assert(status == PLAIN_JSON_DONE);
 }
 
 TEST(structure, blanks) {
@@ -98,11 +98,11 @@ TEST(structure, blanks) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_TRUE);
+    test_assert(status == PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_TRUE);
+    test_assert(status == PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_FALSE);
+    test_assert(status == PLAIN_JSON_DONE);
 }
 
 TEST(structure_malformed, object_empty) {
@@ -110,11 +110,11 @@ TEST(structure_malformed, object_empty) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_TRUE);
+    test_assert(status == PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_TRUE);
+    test_assert(status == PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_FALSE);
+    test_assert(status == PLAIN_JSON_DONE);
 }
 
 SUIT(structure_malformed, test_reset_context, NULL);
@@ -124,7 +124,7 @@ TEST(structure_malformed, object_trailing_key) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_ERROR_UNEXPECTED_TOKEN);
 }
@@ -134,9 +134,9 @@ TEST(structure_malformed, array_key) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_ERROR_UNEXPECTED_TOKEN);
 }
@@ -147,7 +147,7 @@ TEST(structure, root_empty) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_FALSE);
+    test_assert(status == PLAIN_JSON_DONE);
 }
 
 
@@ -156,9 +156,9 @@ TEST(structure_malformed, array_trailing_comma) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_ERROR_UNEXPECTED_TOKEN);
 }
@@ -168,11 +168,11 @@ TEST(structure_malformed, root_unexpected) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_ERROR_UNEXPECTED_EOF);
 }
@@ -183,9 +183,9 @@ TEST(structure_malformed, array_unmatched) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_TRUE);
+    test_assert(status == PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_TRUE);
+    test_assert(status == PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
     test_assert(status == PLAIN_JSON_ERROR_UNEXPECTED_TOKEN);
 }
@@ -195,9 +195,9 @@ TEST(structure_malformed, object_trailing_comma) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_TRUE);
+    test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_ERROR_UNEXPECTED_TOKEN);
 }
@@ -216,11 +216,11 @@ TEST(structure_malformed, root_too_deep) {
 
     for (uint32_t i = 0; i < 31; i++) {
         plain_json_ErrorType status = plain_json_read_token(&context, &token);
-        test_assert(status == PLAIN_JSON_TRUE);
+        test_assert(status == PLAIN_JSON_HAS_REMAINING);
     }
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_ERROR_TOO_DEEP);
+    test_assert(status == PLAIN_JSON_ERROR_NESTING_TOO_DEEP);
 }
 
 TEST(structure_malformed, array_comma_missing) {
@@ -228,9 +228,9 @@ TEST(structure_malformed, array_comma_missing) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_TRUE);
+    test_assert(status == PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_TRUE);
+    test_assert(status == PLAIN_JSON_HAS_REMAINING);
 
     status = plain_json_read_token(&context, &token);
     test_assert(status == PLAIN_JSON_ERROR_MISSING_FIELD_SEPERATOR);
@@ -241,14 +241,14 @@ TEST(structure_malformed, object_nested_comma_missing) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_TRUE);
+    test_assert(status == PLAIN_JSON_HAS_REMAINING);
 
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_TRUE);
+    test_assert(status == PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_TRUE);
+    test_assert(status == PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_TRUE);
+    test_assert(status == PLAIN_JSON_HAS_REMAINING);
 
     status = plain_json_read_token(&context, &token);
     test_assert(status == PLAIN_JSON_ERROR_MISSING_FIELD_SEPERATOR);
@@ -259,9 +259,9 @@ TEST(structure_malformed, object_comma_missing) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_TRUE);
+    test_assert(status == PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_TRUE);
+    test_assert(status == PLAIN_JSON_HAS_REMAINING);
 
     status = plain_json_read_token(&context, &token);
     test_assert(status == PLAIN_JSON_ERROR_MISSING_FIELD_SEPERATOR);
@@ -275,7 +275,7 @@ TEST(structure, array_of_objects_comma_missing) {
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
 
     for (int i = 0; i < 4; i++) {
-        test_assert(status == PLAIN_JSON_TRUE);
+        test_assert(status == PLAIN_JSON_HAS_REMAINING);
         status = plain_json_read_token(&context, &token);
     }
 
@@ -291,7 +291,7 @@ TEST(structure, array_of_arrays_comma_missing) {
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
 
     for (int i = 0; i < 4; i++) {
-        test_assert(status == PLAIN_JSON_TRUE);
+        test_assert(status == PLAIN_JSON_HAS_REMAINING);
         status = plain_json_read_token(&context, &token);
     }
 

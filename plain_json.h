@@ -16,8 +16,8 @@
 #define PLAIN_JSON_STATE_NEEDS_ARRAY_END  0x40
 
 typedef enum {
-    PLAIN_JSON_FALSE = 0,
-    PLAIN_JSON_TRUE = 1,
+    PLAIN_JSON_DONE,
+    PLAIN_JSON_HAS_REMAINING,
 
     PLAIN_JSON_ERROR_STRING_INVALID_ASCII,
     PLAIN_JSON_ERROR_STRING_UNTERMINATED,
@@ -26,15 +26,15 @@ typedef enum {
     PLAIN_JSON_ERROR_STRING_INVALID_UTF16_ESCAPE,
 
     PLAIN_JSON_ERROR_NUMBER_INVALID,
-
     PLAIN_JSON_ERROR_KEYWORD_INVALID,
 
-    PLAIN_JSON_ERROR_NO_MEMORY,
     PLAIN_JSON_ERROR_MISSING_FIELD_SEPERATOR,
-    PLAIN_JSON_ERROR_TOO_DEEP,
-    PLAIN_JSON_ERROR_IS_ROOT,
-    PLAIN_JSON_ERROR_UNEXPECTED_TOKEN,
+    PLAIN_JSON_ERROR_NESTING_TOO_DEEP,
+
     PLAIN_JSON_ERROR_UNEXPECTED_EOF,
+    PLAIN_JSON_ERROR_UNEXPECTED_FIELD_SEPERATOR,
+    PLAIN_JSON_ERROR_UNEXPECTED_ROOT,
+    PLAIN_JSON_ERROR_UNEXPECTED_TOKEN,
 } plain_json_ErrorType;
 
 typedef enum {
@@ -420,7 +420,7 @@ plain_json_intern_read_string(plain_json_Context *context, unsigned int *token_l
     }
 
     (*token_length) = offset;
-    return PLAIN_JSON_TRUE;
+    return PLAIN_JSON_HAS_REMAINING;
 }
 
 static inline plain_json_ErrorType
@@ -437,7 +437,7 @@ plain_json_intern_read_keyword(plain_json_Context *context, plain_json_Type type
             plain_json_intern_peek(context, 3) == 'l') {
             plain_json_intern_consume(context, 3);
             (*token_length) = 4;
-            return PLAIN_JSON_TRUE;
+            return PLAIN_JSON_HAS_REMAINING;
         }
         break;
     case PLAIN_JSON_TYPE_TRUE:
@@ -446,7 +446,7 @@ plain_json_intern_read_keyword(plain_json_Context *context, plain_json_Type type
             plain_json_intern_peek(context, 3) == 'e') {
             plain_json_intern_consume(context, 3);
             (*token_length) = 4;
-            return PLAIN_JSON_TRUE;
+            return PLAIN_JSON_HAS_REMAINING;
         }
         break;
     case PLAIN_JSON_TYPE_FALSE:
@@ -456,7 +456,7 @@ plain_json_intern_read_keyword(plain_json_Context *context, plain_json_Type type
             plain_json_intern_peek(context, 4) == 'e') {
             plain_json_intern_consume(context, 4);
             (*token_length) = 5;
-            return PLAIN_JSON_TRUE;
+            return PLAIN_JSON_HAS_REMAINING;
         }
         break;
     default:
@@ -550,7 +550,7 @@ done:
     }
 
     (*token_length) = offset;
-    return PLAIN_JSON_TRUE;
+    return PLAIN_JSON_HAS_REMAINING;
 }
 
 #define get_state()      context->_depth_buffer[context->_depth_buffer_index]
@@ -573,18 +573,18 @@ done:
     if (context->_depth_buffer_index + 1 < PLAIN_JSON_OPTION_MAX_DEPTH) { \
         context->_depth_buffer_index++;                                   \
     } else {                                                             \
-        return PLAIN_JSON_ERROR_TOO_DEEP;                                \
+        return PLAIN_JSON_ERROR_NESTING_TOO_DEEP;                                \
     }
 
 #define pop_state()                        \
     if (context->_depth_buffer_index > 0) { \
         context->_depth_buffer_index--;     \
     } else {                               \
-        return PLAIN_JSON_ERROR_IS_ROOT;   \
+        return PLAIN_JSON_ERROR_UNEXPECTED_ROOT;   \
     }
 
 static plain_json_ErrorType plain_json_read_token_impl(plain_json_Context *context, plain_json_Token *token) {
-    int status = PLAIN_JSON_TRUE;
+    int status = PLAIN_JSON_HAS_REMAINING;
     int pre_key_state = 0;
 
     plain_json_intern_token_reset(context, token);
@@ -691,7 +691,7 @@ static plain_json_ErrorType plain_json_read_token_impl(plain_json_Context *conte
             if (has_state(PLAIN_JSON_STATE_NEEDS_KEY)) {
                 token->key_start = context->_buffer_offset;
                 status = plain_json_intern_read_string(context, &token->key_length);
-                if (status != PLAIN_JSON_TRUE) {
+                if (status != PLAIN_JSON_HAS_REMAINING) {
                     return status;
                 }
 
@@ -769,25 +769,23 @@ static plain_json_ErrorType plain_json_read_token_impl(plain_json_Context *conte
 is_eof:
     /* There are no more tokens to read. */
     if (has_state(PLAIN_JSON_STATE_IS_ROOT)) {
-        return PLAIN_JSON_FALSE;
+        return PLAIN_JSON_DONE;
     }
 
     status = PLAIN_JSON_ERROR_UNEXPECTED_EOF;
 
-has_error:
 has_token:
     context->_last_token_type = token->type;
     return status;
 }
 
 plain_json_ErrorType plain_json_read_token(plain_json_Context *context, plain_json_Token *token) {
-    int dummy = 0;
     return plain_json_read_token_impl(context, token);
 }
 
 plain_json_ErrorType plain_json_read_token_buffered(plain_json_Context *context, plain_json_Token *tokens, int num_tokens, int *tokens_read) {
-    int status = PLAIN_JSON_TRUE;
-    for((*tokens_read) = 0; (*tokens_read) < num_tokens && status == PLAIN_JSON_TRUE; (*tokens_read)++) {
+    int status = PLAIN_JSON_HAS_REMAINING;
+    for((*tokens_read) = 0; (*tokens_read) < num_tokens && status == PLAIN_JSON_HAS_REMAINING; (*tokens_read)++) {
         status = plain_json_read_token_impl(context, &tokens[*tokens_read]);
     }
 
