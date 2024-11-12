@@ -343,7 +343,7 @@ plain_json_intern_read_string(plain_json_Context *context, unsigned int *token_l
         unsigned long code = value & code_table[length - 1];
 
         if (masked == pattern_table[length - 1] && (value & code) && !is_surrogate) {
-            plain_json_intern_consume(context, length - 2);
+            plain_json_intern_consume(context, length - 1);
             offset += length;
             previous_char = '\0';
             continue;
@@ -354,7 +354,7 @@ plain_json_intern_read_string(plain_json_Context *context, unsigned int *token_l
     read_ascii:
         /* Found unescaped quotes */
         if (previous_char != '\\' && current_char == '\"') {
-            break;
+            goto has_string;
         }
 
         if (current_char == '\0' || current_char == '\n') {
@@ -414,6 +414,8 @@ plain_json_intern_read_string(plain_json_Context *context, unsigned int *token_l
         offset++;
     }
 
+    return PLAIN_JSON_ERROR_STRING_UNTERMINATED;
+has_string:
     (*token_length) = offset;
     return PLAIN_JSON_HAS_REMAINING;
 }
