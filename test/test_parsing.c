@@ -284,7 +284,7 @@ TEST(parsing_malformed, number_leading_zero) {
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_ERROR_NUMBER_INVALID);
+    test_assert_eq(status, PLAIN_JSON_ERROR_NUMBER_LEADING_ZERO);
 }
 
 TEST(parsing_malformed, number_float) {
@@ -295,7 +295,7 @@ TEST(parsing_malformed, number_float) {
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_ERROR_NUMBER_INVALID);
+    test_assert_eq(status, PLAIN_JSON_ERROR_NUMBER_INVALID_DECIMAL);
 }
 
 TEST(parsing_malformed, number_expo_double_dot) {
@@ -306,7 +306,7 @@ TEST(parsing_malformed, number_expo_double_dot) {
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_ERROR_NUMBER_INVALID);
+    test_assert_eq(status, PLAIN_JSON_ERROR_NUMBER_INVALID_DECIMAL);
 }
 
 TEST(parsing_malformed, number_expo_no_decimal) {
@@ -317,7 +317,7 @@ TEST(parsing_malformed, number_expo_no_decimal) {
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_ERROR_NUMBER_INVALID);
+    test_assert_eq(status, PLAIN_JSON_ERROR_NUMBER_INVALID_DECIMAL);
 }
 
 TEST(parsing_malformed, number_expo_double_sign) {
@@ -328,7 +328,7 @@ TEST(parsing_malformed, number_expo_double_sign) {
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_ERROR_NUMBER_INVALID);
+    test_assert_eq(status, PLAIN_JSON_ERROR_NUMBER_INVALID_EXPO);
 }
 
 TEST(parsing_malformed, number_expo_trailing_sign) {
@@ -339,7 +339,7 @@ TEST(parsing_malformed, number_expo_trailing_sign) {
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_ERROR_NUMBER_INVALID);
+    test_assert_eq(status, PLAIN_JSON_ERROR_NUMBER_INVALID_EXPO);
 }
 
 TEST(parsing_malformed, number_starting_plus) {
@@ -350,7 +350,7 @@ TEST(parsing_malformed, number_starting_plus) {
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_ERROR_NUMBER_INVALID);
+    test_assert_eq(status, PLAIN_JSON_ERROR_NUMBER_INVALID_SIGN);
 }
 
 TEST(parsing_malformed, number_double_sign) {
@@ -361,5 +361,5 @@ TEST(parsing_malformed, number_double_sign) {
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_ERROR_NUMBER_INVALID);
+    test_assert_eq(status, PLAIN_JSON_ERROR_NUMBER_INVALID_SIGN);
 }

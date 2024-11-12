@@ -30,13 +30,13 @@ DEP := $(patsubst %.c,$(BUILD_DIR)/%.d,$(TEST_SRC) $(TOOLS_SRC))
 
 all: build/json_test_suit build/dump_state build/run_tests
 
-build/json_test_suit: tools/json_test_suit.c $(INC)
+build/json_test_suit: tools/json_test_suit.c $(INC_PATH)
 	@mkdir -p $(dir $@)
-	$(CC) $(LDFLAGS) tools/json_test_suit.c -o $@
+	$(CC) $(LDFLAGS) $(CFLAGS) tools/json_test_suit.c -o $@
 
-build/dump_state: tools/dump_state.c $(INC)
+build/dump_state: tools/dump_state.c $(INC_PATH)
 	@mkdir -p $(dir $@)
-	$(CC) $(LDFLAGS) tools/dump_state.c -o $@
+	$(CC) $(LDFLAGS) $(CFLAGS) tools/dump_state.c -o $@
 
 build/run_tests: $(TEST_OBJ)
 	@mkdir -p $(dir $@)

@@ -5,13 +5,14 @@
     #define PLAIN_JSON_OPTION_MAX_DEPTH 32
 #endif
 
-#define PLAIN_JSON_STATE_IS_ROOT               0x01
+#define PLAIN_JSON_STATE_IS_START 0x01
+#define PLAIN_JSON_STATE_IS_ROOT 0x02
 
-#define PLAIN_JSON_STATE_NEEDS_KEY             0x02
-#define PLAIN_JSON_STATE_NEEDS_COMMA           0x04
-#define PLAIN_JSON_STATE_NEEDS_VALUE           0x08
-#define PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE     0x10
-#define PLAIN_JSON_STATE_NEEDS_COLON           0x20
+#define PLAIN_JSON_STATE_NEEDS_KEY         0x04
+#define PLAIN_JSON_STATE_NEEDS_COMMA       0x08
+#define PLAIN_JSON_STATE_NEEDS_VALUE       0x10
+#define PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE 0x20
+#define PLAIN_JSON_STATE_NEEDS_COLON       0x40
 
 typedef enum {
     PLAIN_JSON_DONE,
@@ -23,7 +24,11 @@ typedef enum {
     PLAIN_JSON_ERROR_STRING_INVALID_ESCAPE,
     PLAIN_JSON_ERROR_STRING_INVALID_UTF16_ESCAPE,
 
-    PLAIN_JSON_ERROR_NUMBER_INVALID,
+    PLAIN_JSON_ERROR_NUMBER_LEADING_ZERO,
+    PLAIN_JSON_ERROR_NUMBER_INVALID_EXPO,
+    PLAIN_JSON_ERROR_NUMBER_INVALID_SIGN,
+    PLAIN_JSON_ERROR_NUMBER_INVALID_DECIMAL,
+
     PLAIN_JSON_ERROR_KEYWORD_INVALID,
 
     PLAIN_JSON_ERROR_MISSING_COMMA,
@@ -63,8 +68,8 @@ typedef enum {
 ///     type:           The type of this token
 ///
 /// NOTE
-///     If the token has no value, both start and length will be zero. If it has no key, key_start and key_length
-///     will be zero.
+///     If the token has no value, both start and length will be zero. If it has no key, key_start
+///     and key_length will be zero.
 typedef struct {
     unsigned int start;
     unsigned int length;
@@ -82,7 +87,8 @@ typedef struct {
 ///     line_offset:    The current line offset
 ///
 /// NOTE
-///     All fields should be treated as read-only. Values starting with an underscore are reserved for internal use
+///     All fields should be treated as read-only. Values starting with an underscore are reserved
+///     for internal use
 typedef struct {
     const char *_buffer;
 
@@ -106,7 +112,8 @@ typedef struct {
 ///     PLAIN_JSON_TRUE:    There is unprocessed JSON data.
 ///     PLAIN_JSON_FALSE:   The JSON data has been fullly processed.
 ///     <error code>:       An error occured during processing.
-extern plain_json_ErrorType plain_json_read_token(plain_json_Context *context, plain_json_Token *token);
+extern plain_json_ErrorType
+plain_json_read_token(plain_json_Context *context, plain_json_Token *token);
 
 /// Read tokens into a preallocated buffer.
 ///
@@ -117,10 +124,12 @@ extern plain_json_ErrorType plain_json_read_token(plain_json_Context *context, p
 ///     tokens_read:        Stores the total number of read tokens.
 ///
 /// RETURN
-///     PLAIN_JSON_TRUE:    The entire token buffer has been filled, but there is still unprocessed JSON data.
-///     PLAIN_JSON_FALSE:   The JSON data has been fully processed.
-///     <error code>:       An error occured during processing.
-extern plain_json_ErrorType plain_json_read_token_buffered(plain_json_Context *context, plain_json_Token *tokens, int num_tokens, int *tokens_read);
+///     PLAIN_JSON_TRUE:    The entire token buffer has been filled, but there is still unprocessed
+///     JSON data. PLAIN_JSON_FALSE:   The JSON data has been fully processed. <error code>: An
+///     error occured during processing.
+extern plain_json_ErrorType plain_json_read_token_buffered(
+    plain_json_Context *context, plain_json_Token *tokens, int num_tokens, int *tokens_read
+);
 
 /// Setup a new parsing context.
 ///
@@ -128,7 +137,8 @@ extern plain_json_ErrorType plain_json_read_token_buffered(plain_json_Context *c
 ///     context             The target context
 ///     buffer              The raw JSON text.
 ///     buffer_size         Size of the JSON text.
-extern void plain_json_load_buffer(plain_json_Context *context, const char *buffer, unsigned long buffer_size);
+extern void
+plain_json_load_buffer(plain_json_Context *context, const char *buffer, unsigned long buffer_size);
 
 #endif
 
@@ -154,15 +164,14 @@ extern void plain_json_load_buffer(plain_json_Context *context, const char *buff
     #define json_assert(...)
 #endif
 
-#define is_blank(c) (c == ' ' || c == '\t' || c == '\f' || c == '\n' || c == '\v')
+#define is_blank(c) (c == ' ' || c == '\t' || c == '\n' || c == '\r')
 #define is_digit(c) (c >= '0' && c <= '9')
 #define is_hex(c)   ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (is_digit(c)))
 
 /* Token */
 
-static inline void plain_json_intern_token_reset(
-    plain_json_Context *context, plain_json_Token *token
-) {
+static inline void
+plain_json_intern_token_reset(plain_json_Context *context, plain_json_Token *token) {
     token->length = 0;
     token->start = context->_buffer_offset;
     token->key_length = 0;
@@ -175,21 +184,11 @@ static inline char plain_json_intern_has_next(plain_json_Context *context, int o
     return (context->_buffer_offset + offset < context->_buffer_size);
 }
 
-/* Consume the current character + count */
 static inline char plain_json_intern_consume(plain_json_Context *context, int count) {
     json_assert(context->buffer_offset + count < context->buffer_size);
-    char next_char = context->_buffer[context->_buffer_offset];
-    do {
-        if (next_char == '\n') {
-            context->line++;
-            context->line_offset = 0;
-        }
-
-        next_char = context->_buffer[context->_buffer_offset++];
-        context->line_offset++;
-    } while (count--);
-
-    return next_char;
+    char tmp = context->_buffer[context->_buffer_offset];
+    context->_buffer_offset += count;
+    return tmp;
 }
 
 static inline char plain_json_intern_peek(plain_json_Context *context, int offset) {
@@ -201,7 +200,11 @@ static inline char plain_json_intern_peek(plain_json_Context *context, int offse
 
 static inline void plain_json_intern_read_blanks(plain_json_Context *context) {
     while (plain_json_intern_has_next(context, 0) && is_blank(plain_json_intern_peek(context, 0))) {
-        plain_json_intern_consume(context, 0);
+        char blank = plain_json_intern_consume(context, 1);
+        if (blank == '\n') {
+            context->line++;
+            context->line_offset = 0;
+        }
     }
 }
 
@@ -303,7 +306,7 @@ plain_json_intern_read_string(plain_json_Context *context, unsigned int *token_l
             4,                      /* 1111 or invalid */
         };
 
-        current_char = plain_json_intern_consume(context, 0);
+        current_char = plain_json_intern_consume(context, 1);
         if ((current_char & mask_table[0]) == pattern_table[0]) {
             goto read_ascii;
         }
@@ -379,7 +382,7 @@ plain_json_intern_read_string(plain_json_Context *context, unsigned int *token_l
             case 'u':;
                 int i = 0;
                 for (; i < 4 && plain_json_intern_has_next(context, 1); i++) {
-                    current_char = plain_json_intern_consume(context, 0);
+                    current_char = plain_json_intern_consume(context, 1);
 
                     /* Check for valid hex digits */
                     if (!is_hex(current_char)) {
@@ -403,24 +406,21 @@ plain_json_intern_read_string(plain_json_Context *context, unsigned int *token_l
 
             /* Indicate that an escaped sequence was fully consumed */
             previous_char = '\0';
-            offset ++;
+            offset++;
             continue;
         }
 
         previous_char = current_char;
-        offset ++;
-    }
-
-    if (current_char != '"' || !plain_json_intern_has_next(context, 0)) {
-        return PLAIN_JSON_ERROR_UNEXPECTED_EOF;
+        offset++;
     }
 
     (*token_length) = offset;
     return PLAIN_JSON_HAS_REMAINING;
 }
 
-static inline plain_json_ErrorType
-plain_json_intern_read_keyword(plain_json_Context *context, plain_json_Type type, unsigned int *token_length) {
+static inline plain_json_ErrorType plain_json_intern_read_keyword(
+    plain_json_Context *context, plain_json_Type type, unsigned int *token_length
+) {
     json_assert(
         plain_json_intern_peek(context, 0) == 't' || json_intern_peek(context, 0) == 'f' ||
         plain_json_intern_peek(context, 0) == 'n'
@@ -431,7 +431,7 @@ plain_json_intern_read_keyword(plain_json_Context *context, plain_json_Type type
         if (plain_json_intern_has_next(context, 3) && plain_json_intern_peek(context, 1) == 'u' &&
             plain_json_intern_peek(context, 2) == 'l' &&
             plain_json_intern_peek(context, 3) == 'l') {
-            plain_json_intern_consume(context, 3);
+            plain_json_intern_consume(context, 4);
             (*token_length) = 4;
             return PLAIN_JSON_HAS_REMAINING;
         }
@@ -440,7 +440,7 @@ plain_json_intern_read_keyword(plain_json_Context *context, plain_json_Type type
         if (plain_json_intern_has_next(context, 3) && plain_json_intern_peek(context, 1) == 'r' &&
             plain_json_intern_peek(context, 2) == 'u' &&
             plain_json_intern_peek(context, 3) == 'e') {
-            plain_json_intern_consume(context, 3);
+            plain_json_intern_consume(context, 4);
             (*token_length) = 4;
             return PLAIN_JSON_HAS_REMAINING;
         }
@@ -450,7 +450,7 @@ plain_json_intern_read_keyword(plain_json_Context *context, plain_json_Type type
             plain_json_intern_peek(context, 2) == 'l' &&
             plain_json_intern_peek(context, 3) == 's' &&
             plain_json_intern_peek(context, 4) == 'e') {
-            plain_json_intern_consume(context, 4);
+            plain_json_intern_consume(context, 5);
             (*token_length) = 5;
             return PLAIN_JSON_HAS_REMAINING;
         }
@@ -465,31 +465,37 @@ plain_json_intern_read_keyword(plain_json_Context *context, plain_json_Type type
 static inline plain_json_ErrorType
 plain_json_intern_read_number(plain_json_Context *context, unsigned int *token_length) {
     enum {
-        READ_DIGIT,
+        READ_INT,
+        READ_DECIMAL,
         READ_EXPO,
-        READ_EXPO_DIGIT,
-    } status = 0;
+    } status = READ_INT;
+
+    const char *buffer = context->_buffer + context->_buffer_offset;
+    int buffer_size = context->_buffer_size - context->_buffer_offset;
 
     int offset = 0;
-    char current_char = 0;
 
-    int has_dot = 0;
-    int has_expo = 0;
-    int has_sign = 0;
+    /* TODO: To be used for number parsing... */
+    int int_has_sign = 0;
+    int int_start = 0;
+    int int_length = 0;
 
-    while (plain_json_intern_has_next(context, 0)) {
-        current_char = plain_json_intern_peek(context, 0);
+    int decimal_start = 0;
+    int decimal_length = 0;
 
-        switch (current_char) {
+    int expo_has_sign = 0;
+    int expo_start = 0;
+    int expo_length = 0;
+
+    while (offset < buffer_size) {
+        switch (buffer[offset]) {
         case '0':
-            /* JSON does not allow leading zeros */
-            if (offset == 0 || (offset == 1 && has_sign)) {
-                char next_char = plain_json_intern_peek(context, 1);
-                if (is_digit(next_char)) {
-                    return PLAIN_JSON_ERROR_NUMBER_INVALID;
+            if (status == READ_INT && (offset == 0 || (offset == 1 && int_has_sign))) {
+                if (offset + 1 < buffer_size && is_digit(buffer[offset + 1])) {
+                    return PLAIN_JSON_ERROR_NUMBER_LEADING_ZERO;
                 }
             }
-
+            /* fallthrough */
         case '1':
         case '2':
         case '3':
@@ -499,61 +505,83 @@ plain_json_intern_read_number(plain_json_Context *context, unsigned int *token_l
         case '7':
         case '8':
         case '9':
-            status = (status == READ_EXPO) ? READ_EXPO_DIGIT : READ_DIGIT;
-            break;
-        case '+':
-            /* Number may NOT start with a leading '+' */
-            if (offset == 0) {
-                return PLAIN_JSON_ERROR_NUMBER_INVALID;
+            if (status == READ_INT && offset + 1 < buffer_size && buffer[offset + 1] == '.') {
+                status = READ_DECIMAL;
+                decimal_start = offset + 1;
+                offset += 1;
+                int_length = offset - int_start;
+
+                if (offset + 1 < buffer_size && !is_digit(buffer[offset + 1])) {
+                    return PLAIN_JSON_ERROR_NUMBER_INVALID_DECIMAL;
+                }
             }
+
+            break;
         case '-':
-            if (offset == 0) {
-                has_sign = 1;
+            if (status == READ_INT && offset == 0) {
+                int_start = offset + 1;
+                int_has_sign = 1;
+                if (offset + 1 < buffer_size && !is_digit(buffer[offset + 1])) {
+                    return PLAIN_JSON_ERROR_NUMBER_INVALID_SIGN;
+                }
+
                 break;
             }
 
-            if (has_sign || status != READ_EXPO) {
-                return PLAIN_JSON_ERROR_NUMBER_INVALID;
-            }
-            has_sign = 1;
-            break;
+            /* '+/-' are consumed as part of the exponent token 'e' */
+        case '+':
+            return PLAIN_JSON_ERROR_NUMBER_INVALID_SIGN;
+            /* '.' is consumed as part of the int part */
+        case '.':
+            return PLAIN_JSON_ERROR_NUMBER_INVALID_DECIMAL;
         case 'e':
         case 'E':
-            if (has_expo || plain_json_intern_peek(context, -1) == '.' || status != READ_DIGIT) {
-                return PLAIN_JSON_ERROR_NUMBER_INVALID;
+            if (status == READ_EXPO) {
+                return PLAIN_JSON_ERROR_NUMBER_INVALID_EXPO;
             }
+
+            if (offset + 1 >= buffer_size) {
+                return PLAIN_JSON_ERROR_UNEXPECTED_EOF;
+            }
+
+            if (status == READ_INT) {
+                int_length = offset - int_start;
+            } else {
+                decimal_length = offset - decimal_start;
+            }
+
+            char next_char = buffer[offset + 1];
+            if (next_char == '+' || next_char == '-') {
+                offset += 1;
+                expo_has_sign = 1;
+            }
+
+            if (!is_digit(buffer[offset + 1])) {
+                return PLAIN_JSON_ERROR_NUMBER_INVALID_EXPO;
+            }
+
+            expo_start = offset + 1;
             status = READ_EXPO;
-            has_expo = 1;
-            break;
-        case '.':
-            if (has_dot || status >= READ_EXPO) {
-                return PLAIN_JSON_ERROR_NUMBER_INVALID;
-            }
-            has_dot = 1;
             break;
         default:
             goto done;
         }
 
-        plain_json_intern_consume(context, 0);
-        offset ++;
+        offset++;
     }
 
 done:
-    /* Missing the actual exponent */
-    if (status == READ_EXPO) {
-        return PLAIN_JSON_ERROR_NUMBER_INVALID;
-    }
 
     (*token_length) = offset;
+    plain_json_intern_consume(context, offset);
     return PLAIN_JSON_HAS_REMAINING;
 }
 
 /* TODO: At this point, I might aswell use a lookup table */
-#define get_state()      context->_depth_buffer[context->_depth_buffer_index]
-#define set_state(state) (get_state() = (state))
-#define has_state(state) ((get_state() & (state)) > 0)
-#define add_state(state) (set_state(get_state() & (state)))
+#define get_state()         context->_depth_buffer[context->_depth_buffer_index]
+#define set_state(state)    (get_state() = (state))
+#define has_state(state)    ((get_state() & (state)) > 0)
+#define add_state(state)    (set_state(get_state() & (state)))
 #define remove_state(state) (set_state(get_state() ^ (state)))
 
 /* A comma preceeding this token must have been read beforehand */
@@ -563,32 +591,31 @@ done:
     }
 
 /* For this token to be valid, parts of 'state' must match the current state */
-#define check_state(state)                       \
-    if (!has_state(state)) {           \
+#define check_state(state)                        \
+    if (!has_state(state)) {                      \
         return PLAIN_JSON_ERROR_UNEXPECTED_TOKEN; \
     }
-#define check_state_exact(state)                       \
-    if (get_state() != (state)) {           \
+#define check_state_exact(state)                  \
+    if (get_state() != (state)) {                 \
         return PLAIN_JSON_ERROR_UNEXPECTED_TOKEN; \
     }
 
-
-#define push_state()                                                     \
+#define push_state()                                                      \
     if (context->_depth_buffer_index + 1 < PLAIN_JSON_OPTION_MAX_DEPTH) { \
         context->_depth_buffer_index++;                                   \
-    } else {                                                             \
-        return PLAIN_JSON_ERROR_NESTING_TOO_DEEP;                                \
+    } else {                                                              \
+        return PLAIN_JSON_ERROR_NESTING_TOO_DEEP;                         \
     }
 
-#define pop_state()                        \
-    if (context->_depth_buffer_index > 0) { \
-        context->_depth_buffer_index--;     \
-    } else {                               \
-        return PLAIN_JSON_ERROR_UNEXPECTED_ROOT;   \
+#define pop_state()                              \
+    if (context->_depth_buffer_index > 0) {      \
+        context->_depth_buffer_index--;          \
+    } else {                                     \
+        return PLAIN_JSON_ERROR_UNEXPECTED_ROOT; \
     }
 
-static plain_json_ErrorType plain_json_read_token_impl(plain_json_Context *context, plain_json_Token *token) {
-    /* FIXME: My terminology is inconsistent and partially wrong. */
+static plain_json_ErrorType
+plain_json_read_token_impl(plain_json_Context *context, plain_json_Token *token) {
     /* Indicate if this value is prefixed by a comma. Objects/Array can be
      * empty, meaning we can't rely on the state to tell us is if a comma
      * has been processed. */
@@ -598,7 +625,6 @@ static plain_json_ErrorType plain_json_read_token_impl(plain_json_Context *conte
 
     while (plain_json_intern_has_next(context, 0)) {
         plain_json_intern_read_blanks(context);
-
         if (!plain_json_intern_has_next(context, 0)) {
             goto is_eof;
         }
@@ -609,15 +635,17 @@ static plain_json_ErrorType plain_json_read_token_impl(plain_json_Context *conte
             /* The file root may contain object/arrays */
             check_state(
                 PLAIN_JSON_STATE_NEEDS_VALUE | PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE |
-                PLAIN_JSON_STATE_IS_ROOT
+                PLAIN_JSON_STATE_IS_START
             );
             check_for_comma();
 
             token->type = PLAIN_JSON_TYPE_OBJECT_START;
-            plain_json_intern_consume(context, 0);
+            plain_json_intern_consume(context, 1);
 
-            if(has_state(PLAIN_JSON_STATE_NEEDS_VALUE))
+            if (has_state(PLAIN_JSON_STATE_NEEDS_VALUE)) {
                 set_state(PLAIN_JSON_STATE_NEEDS_KEY);
+            }
+
             set_state(get_state() | PLAIN_JSON_STATE_NEEDS_COMMA);
 
             push_state();
@@ -625,32 +653,29 @@ static plain_json_ErrorType plain_json_read_token_impl(plain_json_Context *conte
             goto has_token;
         case '}':
             check_state(PLAIN_JSON_STATE_NEEDS_KEY);
-            if(has_comma)
+            if (has_comma) {
                 return PLAIN_JSON_ERROR_UNEXPECTED_COMMA;
+            }
 
             token->type = PLAIN_JSON_TYPE_OBJECT_END;
-            plain_json_intern_consume(context, 0);
+            plain_json_intern_consume(context, 1);
 
             pop_state();
-
-            /* Objects can occur at root level */
-            if (!has_state(PLAIN_JSON_STATE_IS_ROOT)) {
-                set_state(get_state() | PLAIN_JSON_STATE_NEEDS_COMMA);
-            }
 
             goto has_token;
         case '[':
             check_state(
                 PLAIN_JSON_STATE_NEEDS_VALUE | PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE |
-                PLAIN_JSON_STATE_IS_ROOT
+                PLAIN_JSON_STATE_IS_START
             );
             check_for_comma();
 
             token->type = PLAIN_JSON_TYPE_ARRAY_START;
-            plain_json_intern_consume(context, 0);
+            plain_json_intern_consume(context, 1);
 
-            if(has_state(PLAIN_JSON_STATE_NEEDS_VALUE))
+            if (has_state(PLAIN_JSON_STATE_NEEDS_VALUE)) {
                 set_state(PLAIN_JSON_STATE_NEEDS_KEY);
+            }
             set_state(get_state() | PLAIN_JSON_STATE_NEEDS_COMMA);
 
             push_state();
@@ -658,31 +683,32 @@ static plain_json_ErrorType plain_json_read_token_impl(plain_json_Context *conte
             goto has_token;
         case ']':
             check_state(PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE);
-            if(has_comma)
+            if (has_comma) {
                 return PLAIN_JSON_ERROR_UNEXPECTED_COMMA;
+            }
 
             token->type = PLAIN_JSON_TYPE_ARRAY_END;
-            plain_json_intern_consume(context, 0);
+            plain_json_intern_consume(context, 1);
 
             pop_state();
-
-            /* Arrays are special values since they can occur at root */
-            if (!has_state(PLAIN_JSON_STATE_IS_ROOT)) {
-                set_state(get_state() | PLAIN_JSON_STATE_NEEDS_COMMA);
-            }
 
             goto has_token;
         case ',':
             check_state(PLAIN_JSON_STATE_NEEDS_COMMA);
 
+            /* The root level can only contain a single value */
+            if (has_state(PLAIN_JSON_STATE_IS_ROOT)) {
+                return PLAIN_JSON_ERROR_UNEXPECTED_COMMA;
+            }
+
             has_comma = 1;
-            plain_json_intern_consume(context, 0);
+            plain_json_intern_consume(context, 1);
             remove_state(PLAIN_JSON_STATE_NEEDS_COMMA);
 
             continue;
         case ':':
             check_state_exact(PLAIN_JSON_STATE_NEEDS_COLON);
-            plain_json_intern_consume(context, 0);
+            plain_json_intern_consume(context, 1);
             set_state(PLAIN_JSON_STATE_NEEDS_VALUE);
             continue;
         /* A '"' can mean one of the following:
@@ -691,7 +717,7 @@ static plain_json_ErrorType plain_json_read_token_impl(plain_json_Context *conte
          *   3. A string as an array value */
         case '"':
             check_for_comma();
-            plain_json_intern_consume(context, 0);
+            plain_json_intern_consume(context, 1);
 
             if (has_state(PLAIN_JSON_STATE_NEEDS_KEY)) {
                 token->key_start = context->_buffer_offset;
@@ -703,15 +729,19 @@ static plain_json_ErrorType plain_json_read_token_impl(plain_json_Context *conte
                 set_state(PLAIN_JSON_STATE_NEEDS_COLON);
                 continue;
 
-            } else if (has_state( PLAIN_JSON_STATE_NEEDS_VALUE | PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE)) {
+            } else if (has_state(
+                           PLAIN_JSON_STATE_NEEDS_VALUE | PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE |
+                           PLAIN_JSON_STATE_IS_START
+                       )) {
                 token->start = context->_buffer_offset;
                 token->type = PLAIN_JSON_TYPE_STRING;
                 status = plain_json_intern_read_string(context, &token->length);
 
-                if(has_state(PLAIN_JSON_STATE_NEEDS_VALUE))
+                if (has_state(PLAIN_JSON_STATE_NEEDS_VALUE)) {
                     set_state(PLAIN_JSON_STATE_NEEDS_KEY);
-
+                }
                 set_state(get_state() | PLAIN_JSON_STATE_NEEDS_COMMA);
+
                 goto has_token;
             }
 
@@ -725,25 +755,36 @@ static plain_json_ErrorType plain_json_read_token_impl(plain_json_Context *conte
         case 'f':
             token->type = PLAIN_JSON_TYPE_FALSE;
         read_keyword:
-            check_state(PLAIN_JSON_STATE_NEEDS_VALUE | PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE);
+            check_state(
+                PLAIN_JSON_STATE_NEEDS_VALUE | PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE |
+               PLAIN_JSON_STATE_IS_START
+            );
             check_for_comma();
 
             status = plain_json_intern_read_keyword(context, token->type, &token->length);
 
-            if(has_state(PLAIN_JSON_STATE_NEEDS_VALUE))
+            if (has_state(PLAIN_JSON_STATE_NEEDS_VALUE)) {
                 set_state(PLAIN_JSON_STATE_NEEDS_KEY);
+            }
             set_state(get_state() | PLAIN_JSON_STATE_NEEDS_COMMA);
 
             goto has_token;
         }
 
         if (is_digit(current_char) || current_char == '-' || current_char == '+') {
-            check_state(PLAIN_JSON_STATE_NEEDS_VALUE | PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE);
+            check_state(
+                PLAIN_JSON_STATE_NEEDS_VALUE | PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE |
+                PLAIN_JSON_STATE_IS_START
+            );
             check_for_comma();
 
             token->start = context->_buffer_offset;
             token->type = PLAIN_JSON_TYPE_NUMBER;
             status = plain_json_intern_read_number(context, &token->length);
+
+            if (has_state(PLAIN_JSON_STATE_NEEDS_VALUE)) {
+                set_state(PLAIN_JSON_STATE_NEEDS_KEY);
+            }
             set_state(get_state() | PLAIN_JSON_STATE_NEEDS_COMMA);
 
             goto has_token;
@@ -758,9 +799,10 @@ is_eof:
         return PLAIN_JSON_DONE;
     }
 
-    status = PLAIN_JSON_ERROR_UNEXPECTED_EOF;
+    return PLAIN_JSON_ERROR_UNEXPECTED_EOF;
 
 has_token:
+    context->_depth_buffer[0] = PLAIN_JSON_STATE_IS_ROOT;
     return status;
 }
 
@@ -768,9 +810,12 @@ plain_json_ErrorType plain_json_read_token(plain_json_Context *context, plain_js
     return plain_json_read_token_impl(context, token);
 }
 
-plain_json_ErrorType plain_json_read_token_buffered(plain_json_Context *context, plain_json_Token *tokens, int num_tokens, int *tokens_read) {
+plain_json_ErrorType plain_json_read_token_buffered(
+    plain_json_Context *context, plain_json_Token *tokens, int num_tokens, int *tokens_read
+) {
     int status = PLAIN_JSON_HAS_REMAINING;
-    for((*tokens_read) = 0; (*tokens_read) < num_tokens && status == PLAIN_JSON_HAS_REMAINING; (*tokens_read)++) {
+    for ((*tokens_read) = 0; (*tokens_read) < num_tokens && status == PLAIN_JSON_HAS_REMAINING;
+         (*tokens_read)++) {
         status = plain_json_read_token_impl(context, &tokens[*tokens_read]);
     }
 
@@ -783,7 +828,7 @@ void plain_json_load_buffer(
     context->line = 0;
     context->line_offset = 0;
     context->_depth_buffer_index = 0;
-    context->_depth_buffer[0] = PLAIN_JSON_STATE_IS_ROOT;
+    context->_depth_buffer[0] = PLAIN_JSON_STATE_IS_START;
 
     context->_buffer = buffer;
     context->_buffer_size = buffer_size;

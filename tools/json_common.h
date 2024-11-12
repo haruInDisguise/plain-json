@@ -1,6 +1,8 @@
 #ifndef _JSON_COMMON_H_
 #define _JSON_COMMON_H_
 
+/*#define PRINT_RESULT_LIST*/
+
 #define PLAIN_JSON_IMPLEMENTATION
 #include "../plain_json.h"
 
@@ -33,17 +35,23 @@ static const char *plain_json_type_to_string(plain_json_Type type) {
     return "invalid";
 }
 
-#if 0
+#ifndef PRINT_RESULT_LIST
 static const char *plain_json_error_to_string(plain_json_ErrorType type) {
     switch (type) {
-    case PLAIN_JSON_ERROR_NUMBER_INVALID:
-        return "number_invalid";
     case PLAIN_JSON_ERROR_STRING_INVALID_ASCII:
         return "string_invalid_ascii";
     case PLAIN_JSON_ERROR_STRING_INVALID_UTF8:
         return "string_invalid_utf8";
     case PLAIN_JSON_ERROR_STRING_UNTERMINATED:
         return "string_unterminated";
+    case PLAIN_JSON_ERROR_NUMBER_INVALID_DECIMAL:
+        return "number_invalid_decimal";
+    case PLAIN_JSON_ERROR_NUMBER_LEADING_ZERO:
+        return "number_leading_zero";
+    case PLAIN_JSON_ERROR_NUMBER_INVALID_EXPO:
+        return "number_invalid_exponent";
+    case PLAIN_JSON_ERROR_NUMBER_INVALID_SIGN:
+        return "number_invalid_sign";
     case PLAIN_JSON_ERROR_NESTING_TOO_DEEP:
         return "nesting_too_deep";
     case PLAIN_JSON_ERROR_UNEXPECTED_ROOT:
@@ -70,17 +78,24 @@ static const char *plain_json_error_to_string(plain_json_ErrorType type) {
 
     return "unknown error";
 }
+
 #else
 static const char *plain_json_error_to_string(plain_json_ErrorType type) {
     switch (type) {
-    case PLAIN_JSON_ERROR_NUMBER_INVALID:
-        return "PLAIN_JSON_ERROR_NUMBER_INVALID";
     case PLAIN_JSON_ERROR_STRING_INVALID_ASCII:
         return "PLAIN_JSON_ERROR_STRING_INVALID_ASCII";
     case PLAIN_JSON_ERROR_STRING_INVALID_UTF8:
         return "PLAIN_JSON_ERROR_STRING_INVALID_UTF8";
     case PLAIN_JSON_ERROR_STRING_UNTERMINATED:
         return "PLAIN_JSON_ERROR_STRING_UNTERMINATED";
+    case PLAIN_JSON_ERROR_NUMBER_INVALID_DECIMAL:
+        return "PLAIN_JSON_ERROR_NUMBER_INVALID_DECIMAL";
+    case PLAIN_JSON_ERROR_NUMBER_LEADING_ZERO:
+        return "PLAIN_JSON_ERROR_NUMBER_LEADING_ZERO";
+    case PLAIN_JSON_ERROR_NUMBER_INVALID_EXPO:
+        return "PLAIN_JSON_ERROR_NUMBER_INVALID_EXPO";
+    case PLAIN_JSON_ERROR_NUMBER_INVALID_SIGN:
+        return "PLAIN_JSON_ERROR_NUMBER_INVALID_SIGN";
     case PLAIN_JSON_ERROR_NESTING_TOO_DEEP:
         return "PLAIN_JSON_ERROR_NESTING_TOO_DEEP";
     case PLAIN_JSON_ERROR_UNEXPECTED_ROOT:
