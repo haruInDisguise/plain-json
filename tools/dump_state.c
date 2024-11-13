@@ -60,8 +60,8 @@ __attribute__((unused)) static void dump_state(plain_json_Context *context, char
     buffer[offset] = 0;
 }
 
-#define BUFFER_SIZE 512
-#define VALUE_BUFFER_SIZE 128
+#define BUFFER_SIZE 1024
+#define VALUE_BUFFER_SIZE 512
 static void dump(plain_json_Context *context, plain_json_Token *token) {
     static int previous_depth = 0;
     int depth = (context->_depth_buffer_index > previous_depth) ? previous_depth : context->_depth_buffer_index;
@@ -88,17 +88,17 @@ static void dump(plain_json_Context *context, plain_json_Token *token) {
         offset += snprintf(buffer + offset, BUFFER_SIZE - offset, " = '%s'", value_buffer);
     }
 
-    dump_state(context, value_buffer, VALUE_BUFFER_SIZE);
-    printf("%-40s%s\n", buffer, value_buffer);
+    /*dump_state(context, value_buffer, VALUE_BUFFER_SIZE);*/
+    printf("%s\n", buffer);
 }
 
-#define TOKEN_PAGE_SIZE 256
+#define TOKEN_PAGE_SIZE 1024
 int parse_json(char *buffer, unsigned long long buffer_size) {
     plain_json_Context context = { 0 };
     plain_json_load_buffer(&context, buffer, buffer_size);
     int status = PLAIN_JSON_HAS_REMAINING;
 
-#if 1
+#if 0
     plain_json_Token token;
     while ((status = plain_json_read_token(&context, &token)) == PLAIN_JSON_HAS_REMAINING) {
 

@@ -9,7 +9,7 @@
 
 typedef struct {
     const char *filename;
-    plain_json_ErrorType result;
+    plain_json_ErrorType expected_result;
 } TestCase;
 
 const TestCase test_parsing_cases[] = {
@@ -19,18 +19,20 @@ const TestCase test_parsing_cases[] = {
     { "i_number_huge_exp.json", PLAIN_JSON_DONE },
     { "i_number_neg_int_huge_exp.json", PLAIN_JSON_DONE },
     { "i_number_pos_double_huge_exp.json", PLAIN_JSON_DONE },
-    { "i_number_real_neg_overflow.json", -1 },
-    { "i_number_real_pos_overflow.json", -1 },
-    { "i_number_real_underflow.json", -1 },
-    { "i_number_too_big_neg_int.json", -1 },
-    { "i_number_too_big_pos_int.json", -1 },
+    { "i_number_real_neg_overflow.json", PLAIN_JSON_DONE },
+    { "i_number_real_pos_overflow.json", PLAIN_JSON_DONE },
+    { "i_number_real_underflow.json", PLAIN_JSON_DONE },
+    { "i_number_too_big_neg_int.json", PLAIN_JSON_DONE },
+    { "i_number_too_big_pos_int.json", PLAIN_JSON_DONE },
     { "i_number_very_big_negative_int.json", PLAIN_JSON_DONE },
+
     { "i_object_key_lone_2nd_surrogate.json", PLAIN_JSON_DONE },
     { "i_string_1st_surrogate_but_2nd_missing.json", -1 },
     { "i_string_1st_valid_surrogate_2nd_invalid.json", -1 },
     { "i_string_UTF-16LE_with_BOM.json", -1 },
     { "i_string_UTF-8_invalid_sequence.json", PLAIN_JSON_ERROR_STRING_INVALID_UTF8 },
     { "i_string_UTF8_surrogate_U+D800.json", -1 },
+
     { "i_string_incomplete_surrogate_and_escape_valid.json", -1 },
     { "i_string_incomplete_surrogate_pair.json", -1 },
     { "i_string_incomplete_surrogates_escape_valid.json", -1 },
@@ -168,19 +170,19 @@ const TestCase test_parsing_cases[] = {
     { "n_string_1_surrogate_then_escape_u1.json", -1 },
     { "n_string_1_surrogate_then_escape_u1x.json", -1 },
     { "n_string_accentuated_char_no_quotes.json", PLAIN_JSON_ERROR_UNEXPECTED_TOKEN },
-    { "n_string_backslash_00.json", PLAIN_JSON_ERROR_STRING_UNTERMINATED },
+    { "n_string_backslash_00.json", PLAIN_JSON_ERROR_STRING_INVALID_ESCAPE },
     { "n_string_escape_x.json", PLAIN_JSON_ERROR_STRING_INVALID_ESCAPE },
-    { "n_string_escaped_backslash_bad.json", PLAIN_JSON_ERROR_STRING_UNTERMINATED },
-    { "n_string_escaped_ctrl_char_tab.json", PLAIN_JSON_ERROR_STRING_INVALID_ASCII },
-    { "n_string_escaped_emoji.json", PLAIN_JSON_ERROR_STRING_INVALID_UTF8 },
+    { "n_string_escaped_backslash_bad.json", PLAIN_JSON_ERROR_STRING_INVALID_ESCAPE },
+    { "n_string_escaped_ctrl_char_tab.json", PLAIN_JSON_ERROR_STRING_INVALID_ESCAPE },
+    { "n_string_escaped_emoji.json", PLAIN_JSON_ERROR_STRING_INVALID_ESCAPE },
     { "n_string_incomplete_escape.json", PLAIN_JSON_ERROR_STRING_UNTERMINATED },
     { "n_string_incomplete_escaped_character.json", PLAIN_JSON_ERROR_STRING_INVALID_UTF16_ESCAPE },
     { "n_string_incomplete_surrogate.json", PLAIN_JSON_ERROR_STRING_INVALID_UTF16_ESCAPE },
-    { "n_string_incomplete_surrogate_escape_invalid.json", PLAIN_JSON_ERROR_STRING_INVALID_ESCAPE },
+    { "n_string_incomplete_surrogate_escape_invalid.json", -1 },
     { "n_string_invalid-utf-8-in-escape.json", PLAIN_JSON_ERROR_STRING_INVALID_UTF16_ESCAPE },
     { "n_string_invalid_backslash_esc.json", PLAIN_JSON_ERROR_STRING_INVALID_ESCAPE },
     { "n_string_invalid_unicode_escape.json", PLAIN_JSON_DONE },
-    { "n_string_invalid_utf8_after_escape.json", PLAIN_JSON_ERROR_STRING_INVALID_UTF8 },
+    { "n_string_invalid_utf8_after_escape.json", PLAIN_JSON_ERROR_STRING_INVALID_ESCAPE },
     { "n_string_leading_uescaped_thinspace.json", PLAIN_JSON_ERROR_UNEXPECTED_TOKEN },
     { "n_string_no_quotes_with_bad_escape.json", PLAIN_JSON_ERROR_UNEXPECTED_TOKEN },
     { "n_string_single_doublequote.json", PLAIN_JSON_ERROR_STRING_UNTERMINATED },
@@ -413,7 +415,7 @@ int main(void) {
             //      - The test succeeded
             //      - The test failed
         case 'i':
-            if (test_case.result == result) {
+            if (test_case.expected_result == result) {
                 report_string_index = 3;
                 passed = 1;
             } else {
@@ -431,7 +433,7 @@ int main(void) {
         case 'n':
             if (result == PLAIN_JSON_DONE) {
                 report_string_index = 1;
-            } else if (test_case.result != result) {
+            } else if (test_case.expected_result != result) {
                 report_string_index = 2;
             } else {
                 report_string_index = 0;
@@ -443,9 +445,9 @@ int main(void) {
 #ifndef PRINT_RESULT_LIST
         if (!PRINT_ONLY_FAILURE || !passed) {
             printf(
-                "%02d. %-50s%-25s (got: %s expected: %s)\n", i, test_case.filename,
+                "%02d. %-50s%-25s (got: '%s' expected: '%s')\n", i, test_case.filename,
                 report_string[report_string_index], plain_json_error_to_string(result),
-                plain_json_error_to_string(test_case.result)
+                plain_json_error_to_string(test_case.expected_result)
             );
             if (!passed) {
                 printf("%s\n", text_buffer);

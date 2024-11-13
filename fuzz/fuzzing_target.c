@@ -1,32 +1,31 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#define JSON_IMPLEMENTATION
+#define PLAIN_JSON_IMPLEMENTATION
 #include "../plain_json.h"
 
 #pragma clang optimize off
 
 void parse_json(const char *buffer, size_t buffer_length) {
-    char string_buffer[256] = { 0 };
-    char key_buffer[64] = { 0 };
+    plain_json_Context context = { 0 };
+    plain_json_load_buffer(&context, buffer, buffer_length);
 
-    plain_jsonContext context = { 0 };
-    plain_jsonsetup(&context);
-    plain_jsonload_buffer(&context, buffer, buffer_length);
+    plain_json_Token token = { 0 };
 
-    plain_jsonToken token = { 0 };
-    plain_jsontoken_setup(&token, key_buffer, 64, string_buffer, 256);
+    int state = PLAIN_JSON_HAS_REMAINING;
+    while (state == PLAIN_JSON_HAS_REMAINING) {
+        state = plain_json_read_token(&context, &token);
+    }
 
-    int state = JSON_TRUE;
-    while (state == JSON_TRUE) {
-        state = plain_jsonread_token(&context, &token);
+    if(state < 0 || state > PLAIN_JSON_ERROR_UNEXPECTED_TOKEN) {
+        abort();
     }
 }
 
 __AFL_FUZZ_INIT();
 
 int main(void) {
-    // "Deffered Initialization" should be safe to use in our use case.
+    // "Deferred Initialization" should be safe to use in our use case.
     // See:
     // https://github.com/AFLplusplus/AFLplusplus/blob/stable/instrumentation/README.persistent_mode.md#3-deferred-initialization
     __AFL_INIT();

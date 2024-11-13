@@ -38,7 +38,7 @@ run() {
     export AFL_TESTCACHE_SIZE=1000
     export AFL_LLVM_MAP_ADDR=0x10000
     export AFL_AUTORESUME=1
-    afl-fuzz -i input -o output -x json.dict -- ./$(TARGET)
+    afl-fuzz -i input -o output -x json.dict -- "$BIN_TARGET"
 }
 
 clean() {
