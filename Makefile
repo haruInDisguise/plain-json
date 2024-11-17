@@ -1,12 +1,12 @@
 # TODO: Replace make with meson
 CFLAGS += -std=c99 -Itest/libtest/include
-CFLAGS += -Wall -Wpedantic -Wextra -Wno-sign-conversion -Wno-implicit-fallthrough
+CFLAGS += -Wall -Wpedantic -Wextra -Wconversion -Wno-sign-conversion -Wno-implicit-fallthrough -Wno-unnused-variable
 LDFLAGS =
 
 BUILD_CONFIG ?= debug
 
 ifeq ($(BUILD_CONFIG),debug)
-CFLAGS += -DJSON_DEBUG -O0 -gdwarf-5 -fno-omit-frame-pointer -fsanitize=undefined,address
+CFLAGS += -DPLAIN_JSON_DEBUG -O0 -gdwarf-5 -fno-omit-frame-pointer -fsanitize=undefined,address
 LDFLAGS += -fsanitize=undefined,address
 
 else ifeq ($(BUILD_CONFIG),release)
@@ -23,7 +23,7 @@ TEST_BIN = $(BUILD_DIR)/run_tests
 TEST_SRC = test/test_main.c \
 		   test/test_structure.c \
 		   test/test_parsing.c \
-		   test/test_utf8.c
+		   test/test_unicode.c
 TEST_OBJ := $(patsubst %.c,$(BUILD_DIR)/%.o,$(TEST_SRC))
 
 DEP := $(patsubst %.c,$(BUILD_DIR)/%.d,$(TEST_SRC) $(TOOLS_SRC))

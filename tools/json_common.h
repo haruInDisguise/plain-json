@@ -38,10 +38,16 @@ static const char *plain_json_type_to_string(plain_json_Type type) {
 #ifndef PRINT_RESULT_LIST
 static const char *plain_json_error_to_string(plain_json_ErrorType type) {
     switch (type) {
+    case PLAIN_JSON_ERROR_STRING_UTF8_HAS_SURROGATE:
+        return "string_utf8_has_surrogate";
+    case PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE:
+        return "string_invalid_utf16_surrogate";
+    case PLAIN_JSON_ERROR_STRING_UTF16_INVALID:
+        return "string_invalid_utf16";
+    case PLAIN_JSON_ERROR_STRING_UTF8_INVALID:
+        return "string_invalid_utf8";
     case PLAIN_JSON_ERROR_STRING_INVALID_ASCII:
         return "string_invalid_ascii";
-    case PLAIN_JSON_ERROR_STRING_INVALID_UTF8:
-        return "string_invalid_utf8";
     case PLAIN_JSON_ERROR_STRING_UNTERMINATED:
         return "string_unterminated";
     case PLAIN_JSON_ERROR_NUMBER_INVALID_DECIMAL:
@@ -56,8 +62,8 @@ static const char *plain_json_error_to_string(plain_json_ErrorType type) {
         return "nesting_too_deep";
     case PLAIN_JSON_ERROR_UNEXPECTED_ROOT:
         return "unexpected_root";
-    case PLAIN_JSON_ERROR_UNEXPECTED_TOKEN:
-        return "unexpected_token";
+    case PLAIN_JSON_ERROR_ILLEGAL_CHAR:
+        return "illegal_character";
     case PLAIN_JSON_ERROR_UNEXPECTED_EOF:
         return "unexpected_eof";
     case PLAIN_JSON_ERROR_UNEXPECTED_COMMA:
@@ -68,8 +74,6 @@ static const char *plain_json_error_to_string(plain_json_ErrorType type) {
         return "missing_field_seperator";
     case PLAIN_JSON_ERROR_STRING_INVALID_ESCAPE:
         return "string_invalid_escape";
-    case PLAIN_JSON_ERROR_STRING_INVALID_UTF16_ESCAPE:
-        return "string_invalid_utf16";
     case PLAIN_JSON_HAS_REMAINING:
         return "parsing_has_remaining";
     case PLAIN_JSON_DONE:

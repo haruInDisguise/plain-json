@@ -126,7 +126,7 @@ TEST(structure_malformed, object_trailing_key) {
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_ERROR_UNEXPECTED_TOKEN);
+    test_assert_eq(status, PLAIN_JSON_ERROR_ILLEGAL_CHAR);
 }
 
 TEST(structure_malformed, array_key) {
@@ -138,7 +138,7 @@ TEST(structure_malformed, array_key) {
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_ERROR_UNEXPECTED_TOKEN);
+    test_assert_eq(status, PLAIN_JSON_ERROR_ILLEGAL_CHAR);
 }
 
 TEST(structure, root_empty) {
@@ -147,7 +147,7 @@ TEST(structure, root_empty) {
     plain_json_load_buffer(&context, text, strlen(text));
 
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_DONE);
+    test_assert(status == PLAIN_JSON_ERROR_UNEXPECTED_EOF);
 }
 
 
@@ -187,7 +187,7 @@ TEST(structure_malformed, array_unmatched) {
     status = plain_json_read_token(&context, &token);
     test_assert(status == PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_ERROR_UNEXPECTED_TOKEN);
+    test_assert(status == PLAIN_JSON_ERROR_ILLEGAL_CHAR);
 }
 
 TEST(structure_malformed, object_trailing_comma) {
@@ -200,14 +200,6 @@ TEST(structure_malformed, object_trailing_comma) {
     test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_ERROR_UNEXPECTED_COMMA);
-}
-
-TEST(structure_malformed, root_value) {
-    const char *text = "\"i do not belong here\"";
-    plain_json_load_buffer(&context, text, strlen(text));
-
-    plain_json_ErrorType status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_ERROR_UNEXPECTED_TOKEN);
 }
 
 TEST(structure_malformed, root_too_deep) {

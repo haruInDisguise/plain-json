@@ -105,7 +105,7 @@ TEST(parsing_malformed, string_eof) {
     plain_json_ErrorType status = plain_json_read_token(&context, &token);
     test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_ERROR_UNEXPECTED_EOF);
+    test_assert(status == PLAIN_JSON_ERROR_STRING_UNTERMINATED);
 }
 
 TEST(parsing_malformed, string_control) {
@@ -127,7 +127,7 @@ TEST(parsing_malformed, string_escape_utf16) {
     test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
 
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_ERROR_STRING_INVALID_UTF16_ESCAPE);
+    test_assert(status == PLAIN_JSON_ERROR_STRING_UTF16_INVALID);
 }
 
 TEST(parsing_malformed, string_escape_utf16_incomplete) {
@@ -139,7 +139,7 @@ TEST(parsing_malformed, string_escape_utf16_incomplete) {
     test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
 
     status = plain_json_read_token(&context, &token);
-    test_assert(status == PLAIN_JSON_ERROR_STRING_INVALID_UTF16_ESCAPE);
+    test_assert(status == PLAIN_JSON_ERROR_STRING_UTF16_INVALID);
 }
 
 TEST(parsing_malformed, keywords_invalid) {
@@ -151,7 +151,7 @@ TEST(parsing_malformed, keywords_invalid) {
     test_assert_eq(status, PLAIN_JSON_HAS_REMAINING);
 
     status = plain_json_read_token(&context, &token);
-    test_assert_eq(status, PLAIN_JSON_ERROR_UNEXPECTED_TOKEN);
+    test_assert_eq(status, PLAIN_JSON_ERROR_ILLEGAL_CHAR);
 }
 
 TEST(parsing_malformed, keyword_invalid_true) {
