@@ -1,65 +1,60 @@
 # plain-json
 
-A very small and lightweight JSON Parser.
+A plain/"no bullshit" approach to JSON serialization/deserialization in C.
 
-## Features
+## What it is
 
-- [STD style](https://github.com/nothings/stb), header only library. It does not require and external dependencies, including libc!
+- [STD style](https://github.com/nothings/stb), header only library
+- Hackable, integratable and customizable, thanks to its lack of dynamic memory allocation, external
+  dependencies (even libc) and small code footprint.
+- Completely free of external dependencies (even libc) or dynamic memory allocation.
 - Written in C99
-- Streaming, single pass parser. This enables a very low memory footprint and support for large files[^1]
-- No memory dynamic allocation
-- Support UTF-8 validation [^2]
-- Strictly compliance with ECMA-404/RFC8259
+- Streaming, single pass parser. This enables a very low memory footprint and support for large files
+- Correct. The library is strictly compliance with ECMA-404/RFC8259 and passes all the parsing related
+  test cases provided by the [JSONTestSuit](https://github.com/nst/JSONTestSuite), with sane choices
+  regarding the implementation defined test cases.
 
-[^1]: This might not be the best approach for most usecases. See TODO
-[^2]: Valid but unused codepoints are (yet) not considered to be invalid
+## What it isn't
 
-## Do be done
+- Feature rich. This parser does one job: Serialize/Deserialize JSON.
+- Extremely performant. While this library should be reasonably quick (on account of it only doing what
+  is necessary, and including some "low hanging" speedups), not a lot of effort went into optimization.
 
-- Port to C89?
-- Switch from Make to Meson
+## JSONTestSuit
 
----
-
-- It makes a more sense to return strings and keys as slices into the file buffer itself, instead of reading them into seperate buffers
-    - This would also make it possible to implement basic support for reading multiple tokens at once
-- Correctly report unused UTF-8 codepoints as invalid
-- Add compile time options using macros:
-    - Ability to set the maximum nesting level
-    - Integer/Float parsing as 64bit int/float types
-    - Integer/Float parsing as 32bit int/float types
+https://github.com/nst/JSONTestSuite
 
 ## API
 
-The entrypoint is represented as a "context":
+NOTE: This library is in early development and might introduce breaking changes to the API.
+
+The context contains the state of ongoing/completed parsing operations. Unless you know what you are doing,
+fields starting with an underscore should be ignored, as they are reserved for internal use.
+In general, all fields in this struct shoud be treated as read only.
+
 ```c
 typedef struct {
-    const char *buffer;
+    const char *_buffer;
 
-    unsigned long buffer_size;
-    unsigned long buffer_offset;
+    unsigned int _buffer_size;
+    unsigned int _buffer_offset;
 
-    int depth_buffer_index;
-    int depth_buffer[PLAIN_JSON_OPTION_MAX_DEPTH];
-    /* Reserved for internal use */
-    int _last_token_type;
+    unsigned short _depth_buffer_index;
+    unsigned short _depth_buffer[PLAIN_JSON_OPTION_MAX_DEPTH];
 
-    int line;
-    int line_offset;
+    int line;           /* The parsers current offset as lines/line_offset. */
+    int line_offset;    /* Usefull for locateing errors. */
 } plain_json_Context;
 ```
 
-This library represents JSON data as primitive Tokens:
+
 ```c
 typedef struct {
-    char *value_buffer;
-    char *key_buffer;
+    unsigned int start;
+    unsigned int length;
 
-    int key_buffer_size;
-    int value_buffer_size;
-
-    int start;
-    int end;
+    unsigned int key_start;
+    unsigned int key_length;
 
     plain_json_Type type;
 } plain_json_Token;
@@ -67,12 +62,13 @@ typedef struct {
 
 Each Token can represent either a value or a structural token (the start/end of an object/array).
 
+## Integration with C++
+
 ## Resources
 
 - ECMA404 spec: https://ecma-international.org/publications-and-standards/standards/ecma-404/
-- "json.org spec": https://www.json.org/json-en.html
 - RFC8259: https://www.rfc-editor.org/rfc/rfc8259
 
+- RFC3629: https://www.rfc-editor.org/rfc/rfc3629
 - UTF-8 Wiki: https://en.wikipedia.org/wiki/UTF-8
 - "Unicode Encoding! [...]" by EmNudge: https://www.youtube.com/watch?v=uTJoJtNYcaQ&t=2s
-- RFC3629: https://www.rfc-editor.org/rfc/rfc3629
