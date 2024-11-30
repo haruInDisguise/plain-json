@@ -10,16 +10,18 @@
 
 #include "json_common.h"
 
-static void print_error(plain_json_Context *context, plain_json_ErrorType type) {
+static void print_error(plain_json_Context *context, usize position, plain_json_ErrorType type) {
+    u32 line, offset;
+    plain_json_intern_compute_offset(context, position, &line, &offset);
     fprintf(
-        stderr, "error: %s at %d:%d\n", plain_json_error_to_string(type), context->line, context->line_offset
+        stderr, "error: %s at %zu:%zu\n", plain_json_error_to_string(type), line, offset
     );
 }
 __attribute__((unused)) static void dump_state(plain_json_Context *context, char *buffer, int buffer_size) {
-    int state = context->_depth_buffer[context->_depth_buffer_index];
+    u32 state = context->depth_buffer[context->depth_buffer_index];
     char *state_as_string = NULL;
-    int bitcount = 0;
-    int offset = 0;
+    u32 bitcount = 0;
+    u32 offset = 0;
 
     for (int i = 0; i < 31; i++) {
         int state_bit = state & (1 << i);
@@ -61,31 +63,17 @@ __attribute__((unused)) static void dump_state(plain_json_Context *context, char
 }
 
 #define BUFFER_SIZE 1024
-#define VALUE_BUFFER_SIZE 512
-static void dump(plain_json_Context *context, plain_json_Token *token) {
-    static int previous_depth = 0;
-    int depth = (context->_depth_buffer_index > previous_depth) ? previous_depth : context->_depth_buffer_index;
-    previous_depth = context->_depth_buffer_index;
-
+static void dump(plain_json_Context *context, const plain_json_Token *token) {
     char buffer[BUFFER_SIZE] = { 0 };
-    int offset = snprintf(buffer, BUFFER_SIZE, "[%d] %s", depth, plain_json_type_to_string(token->type));
 
-    char value_buffer[VALUE_BUFFER_SIZE] = {0};
-    if (token->key_length > 0) {
-        memcpy(
-            value_buffer, context->_buffer + token->key_start,
-            (token->key_length <= VALUE_BUFFER_SIZE) ? token->key_length : VALUE_BUFFER_SIZE
-        );
-        offset += snprintf(buffer + offset, VALUE_BUFFER_SIZE - offset, ": \"%s\"", value_buffer);
+    int offset = snprintf(buffer, BUFFER_SIZE, "%-12s", plain_json_type_to_string(token->type));
+
+    if (token->key_index != PLAIN_JSON_NO_KEY) {
+        offset += snprintf(buffer + offset, BUFFER_SIZE - offset, ": \"%s\"", plain_json_get_key(context, token->key_index));
     }
 
-    if (token->length > 0) {
-        memset(value_buffer, 0, VALUE_BUFFER_SIZE);
-        memcpy(
-            value_buffer, context->_buffer + token->start,
-            (token->length <= VALUE_BUFFER_SIZE) ? token->length : VALUE_BUFFER_SIZE
-        );
-        offset += snprintf(buffer + offset, BUFFER_SIZE - offset, " = '%s'", value_buffer);
+    if (token->type == PLAIN_JSON_TYPE_STRING) {
+        offset += snprintf(buffer + offset, BUFFER_SIZE - offset, " = '%s'", plain_json_get_string(context, token->value.string_index));
     }
 
     /*dump_state(context, value_buffer, VALUE_BUFFER_SIZE);*/
@@ -95,37 +83,25 @@ static void dump(plain_json_Context *context, plain_json_Token *token) {
 #define TOKEN_PAGE_SIZE 1024
 int parse_json(char *buffer, unsigned long long buffer_size) {
     plain_json_Context context = { 0 };
-    plain_json_load_buffer(&context, buffer, buffer_size);
-    int status = PLAIN_JSON_HAS_REMAINING;
+    plain_json_AllocatorConfig alloc_config = {
+        .free_func = free,
+        .alloc_func = malloc,
+        .realloc_func = realloc,
+    };
 
-#if 0
-    plain_json_Token token;
-    while ((status = plain_json_read_token(&context, &token)) == PLAIN_JSON_HAS_REMAINING) {
+    plain_json_ErrorType status = plain_json_parse(&context, alloc_config, buffer, buffer_size);
 
-        dump(&context, &token);
+    plain_json_List token_buffer = context.token_buffer;
+    for (u32 i = 0; i < token_buffer.buffer_size / token_buffer.item_size; i++) {
+        dump(&context, plain_json_get_token(&context, i));
     }
 
-    if (status != PLAIN_JSON_HAS_REMAINING && status != PLAIN_JSON_DONE) {
-        print_error(&context, status);
-        return -1;
-    }
-#else
-    plain_json_Token *tokens = malloc(TOKEN_PAGE_SIZE * sizeof(*tokens));
-    int tokens_read = 0;
-
-    status = plain_json_read_token_buffered(&context, tokens, TOKEN_PAGE_SIZE, &tokens_read);
-    if (status != PLAIN_JSON_HAS_REMAINING && status != PLAIN_JSON_DONE) {
-        print_error(&context, status);
-        free(tokens);
-        return -1;
+    if(status != PLAIN_JSON_DONE) {
+        const plain_json_Token *error_token = plain_json_get_token(&context, (token_buffer.buffer_size / token_buffer.item_size) - 1);
+        print_error(&context, error_token->start, status);
     }
 
-    for (int i = 0; i < tokens_read; i++) {
-        dump(&context, tokens + i);
-    }
-
-    free(tokens);
-#endif
+    plain_json_free(&context);
 
     return 0;
 }

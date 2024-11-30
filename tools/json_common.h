@@ -10,8 +10,6 @@ static const char *plain_json_type_to_string(plain_json_Type type) {
     switch (type) {
     case PLAIN_JSON_TYPE_INVALID:
         return "invalid";
-    case PLAIN_JSON_TYPE_ERROR:
-        return "error";
     case PLAIN_JSON_TYPE_OBJECT_START:
         return "object_start";
     case PLAIN_JSON_TYPE_OBJECT_END:
@@ -22,17 +20,21 @@ static const char *plain_json_type_to_string(plain_json_Type type) {
         return "array_end";
     case PLAIN_JSON_TYPE_STRING:
         return "string";
-    case PLAIN_JSON_TYPE_NUMBER:
-        return "integer";
     case PLAIN_JSON_TYPE_NULL:
         return "null";
-    case PLAIN_JSON_TYPE_FALSE:
-        return "false";
-    case PLAIN_JSON_TYPE_TRUE:
-        return "true";
+    case PLAIN_JSON_TYPE_BOOLEAN:
+        return "boolean";
+    case PLAIN_JSON_TYPE_INTEGER:
+        return "integer";
+    case PLAIN_JSON_TYPE_REAL32:
+        return "real32";
+    case PLAIN_JSON_TYPE_REAL64:
+        return "real64";
+    case PLAIN_JSON_TYPE_ERROR:
+        return "error_token";
     }
 
-    return "invalid";
+    return "unknown_type";
 }
 
 #ifndef PRINT_RESULT_LIST
@@ -78,9 +80,11 @@ static const char *plain_json_error_to_string(plain_json_ErrorType type) {
         return "parsing_has_remaining";
     case PLAIN_JSON_DONE:
         return "done";
+    case PLAIN_JSON_ERROR_NO_MEMORY:
+        return "no_memory";
     }
 
-    return "unknown error";
+    return "unknown_error";
 }
 
 #else

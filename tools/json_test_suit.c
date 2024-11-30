@@ -391,11 +391,13 @@ int main(void) {
         }
 
         plain_json_Context context = { 0 };
-        plain_json_load_buffer(&context, text_buffer, text_size);
-
         plain_json_ErrorType result = PLAIN_JSON_HAS_REMAINING;
-        int tokens_read = 0;
-        result = plain_json_read_token_buffered(&context, tokens, TOKEN_BUFFER_SIZE, &tokens_read);
+        plain_json_AllocatorConfig alloc_config = {
+            .free_func = free,
+            .alloc_func = malloc,
+            .realloc_func = realloc
+        };
+        result = plain_json_parse(&context, alloc_config, text_buffer, text_size);
 
         int passed = 0;
         int report_string_index = 0;
@@ -460,6 +462,7 @@ int main(void) {
 #endif
 
         free(text_buffer);
+        plain_json_free(&context);
         fclose(text_file);
     }
 
