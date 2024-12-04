@@ -117,7 +117,7 @@ typedef struct {
 } plain_json_List;
 
 typedef struct {
-    const char *buffer;
+    const u8 *buffer;
 
     u32 buffer_size;
     u32 buffer_offset;
@@ -227,7 +227,7 @@ static inline char plain_json_intern_peek(plain_json_Context *context, int offse
 /* Parsing */
 
 static inline u8
-plain_json_intern_parse_utf16(const char *buffer, const u32 buffer_size, unsigned long *codepoint) {
+plain_json_intern_parse_utf16(const u8 *buffer, const u32 buffer_size, unsigned long *codepoint) {
     if (4 >= buffer_size) {
         return 0;
     }
@@ -273,6 +273,13 @@ static plain_json_ErrorType plain_json_intern_read_string(plain_json_Context *co
         0xF0808080UL,
     };
 
+    static const u32 range_mask[4] = {
+        0x7F000000,
+        0x1E000000,
+        0x0F200000,
+        0x0
+    };
+
     /* The high nibble of the starting byte encodes its type and
      * therefore the length of the utf8 encoded sequence */
     static const unsigned char length_table[] = {
@@ -283,10 +290,10 @@ static plain_json_ErrorType plain_json_intern_read_string(plain_json_Context *co
         4,                      /* 1111 or invalid */
     };
 
-    const char *buffer = context->buffer + context->buffer_offset;
+    const u8 *buffer = context->buffer + context->buffer_offset;
     const u32 buffer_size = context->buffer_size - context->buffer_offset;
 
-    char cache[PLAIN_JSON_INTERN_STRING_CACHE] = { 0 };
+    u8 cache[PLAIN_JSON_INTERN_STRING_CACHE] = { 0 };
     u32 cache_offset = 0;
 
     u32 offset = 0;
@@ -410,6 +417,7 @@ static plain_json_ErrorType plain_json_intern_read_string(plain_json_Context *co
                 /* Error: Codepoint is invalid */
                 return PLAIN_JSON_ERROR_STRING_UTF16_INVALID;
             }
+            offset += 4;
 
             if ((codepoint & surrogate_mask) == low_surrogate_layout) {
                 /* Error: Unexpected low surrogate */
@@ -418,7 +426,6 @@ static plain_json_ErrorType plain_json_intern_read_string(plain_json_Context *co
 
             if ((codepoint & surrogate_mask) == high_surrogate_layout) {
                 /* Read low surrogate */
-                offset += 4;
                 if (offset + 2 >= buffer_size || buffer[offset] != '\\' ||
                     buffer[offset + 1] != 'u') {
                     /* Error: Second codepoint missing */
@@ -445,27 +452,28 @@ static plain_json_ErrorType plain_json_intern_read_string(plain_json_Context *co
                 u32 low_surrogate = codepoint;
                 codepoint = 0;
                 codepoint = ((high_surrogate & 0x3FF) << 10) | (low_surrogate & 0x3FF);
+                codepoint += 0x10000;
             }
 
             /* Encode into UTF-8 */
             u32 part = 0;
             if (codepoint <= 0x07FF) {
-                part = codepoint >> 9;
+                part = codepoint;
                 cache[cache_offset] = 0xC0 | ((part >> 6) & 0x1F);
-                cache[cache_offset] |= (part & 0x3F);
+                cache[cache_offset + 1] = 0x80 | (part & 0x3F);
                 cache_offset += 2;
             } else if (codepoint <= 0xFFFF) {
-                part = codepoint >> 4;
+                part = codepoint;
                 cache[cache_offset] = 0xE0 | ((part >> 12) & 0x0F);
-                cache[cache_offset] |= ((part >> 6) & 0x3F);
-                cache[cache_offset] |= (part & 0x3F);
+                cache[cache_offset + 1] = 0x80 | ((part >> 6) & 0x3F);
+                cache[cache_offset + 2] = 0x80 | (part & 0x3F);
                 cache_offset += 3;
             } else if (codepoint <= 0x10FFFF) {
                 part = codepoint;
-                cache[cache_offset] = 0xF0 | ((part >> 18) & 0xFF);
-                cache[cache_offset] |= ((part >> 12) & 0x3F);
-                cache[cache_offset] |= ((part >> 6) & 0x3F);
-                cache[cache_offset] |= (part & 0x3F);
+                cache[cache_offset] = 0xF0 | ((part >> 18) & 0x07);
+                cache[cache_offset + 1] = 0x80 | ((part >> 12) & 0x3F);
+                cache[cache_offset + 2] = 0x80 | ((part >> 6) & 0x3F);
+                cache[cache_offset + 3] = 0x80 | (part & 0x3F);
                 cache_offset += 4;
             } else {
                 return PLAIN_JSON_ERROR_STRING_UTF16_INVALID;
@@ -490,7 +498,7 @@ done:
 
 static inline plain_json_ErrorType
 plain_json_intern_read_keyword(plain_json_Context *context, u32 *token_length) {
-    const char *buffer = context->buffer + context->buffer_offset;
+    const u8 *buffer = context->buffer + context->buffer_offset;
     const u32 buffer_size = context->buffer_size - context->buffer_offset;
     json_assert(buffer[0] == 't' || buffer[0] == 'f' || buffer[0] == 'n');
 
@@ -532,7 +540,7 @@ plain_json_intern_read_number(plain_json_Context *context, u32 *token_length) {
         READ_EXPO,
     } status = READ_INT;
 
-    const char *buffer = context->buffer + context->buffer_offset;
+    const u8 *buffer = context->buffer + context->buffer_offset;
     long buffer_size = context->buffer_size - context->buffer_offset;
 
     int offset = 0;
@@ -863,7 +871,7 @@ plain_json_intern_read_token(plain_json_Context *context, plain_json_Token *toke
 }
 
 static void
-plain_json_intern_load_buffer(plain_json_Context *context, const char *buffer, u32 buffer_size) {
+plain_json_intern_load_buffer(plain_json_Context *context, const u8 *buffer, u32 buffer_size) {
     context->depth_buffer_index = 0;
     context->depth_buffer[0] = PLAIN_JSON_STATE_IS_START;
 
@@ -907,7 +915,7 @@ plain_json_ErrorType plain_json_parse(
     context->string_buffer.item_size = 1;
     context->token_buffer.item_size = sizeof(plain_json_Token);
 
-    plain_json_intern_load_buffer(context, buffer, buffer_size);
+    plain_json_intern_load_buffer(context, (u8*)buffer, buffer_size);
 
     while (status == PLAIN_JSON_HAS_REMAINING) {
         plain_json_Token token = { 0 };
