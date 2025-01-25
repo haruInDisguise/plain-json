@@ -6,18 +6,16 @@
 
 #pragma clang optimize off
 
-void parse_json(const char *buffer, size_t buffer_length) {
+void parse_json(u8 *buffer, size_t buffer_length) {
     plain_json_Context context = { 0 };
-    plain_json_load_buffer(&context, buffer, buffer_length);
+    plain_json_AllocatorConfig alloc_config = {
+        .alloc_func = malloc,
+        .realloc_func = realloc,
+        .free_func = free,
+    };
 
-    plain_json_Token token = { 0 };
-
-    int state = PLAIN_JSON_HAS_REMAINING;
-    while (state == PLAIN_JSON_HAS_REMAINING) {
-        state = plain_json_read_token(&context, &token);
-    }
-
-    if(state < 0 || state > PLAIN_JSON_ERROR_UNEXPECTED_TOKEN) {
+    plain_json_ErrorType state = plain_json_parse(&context, alloc_config, buffer, buffer_length);
+    if(state < 0 || state > PLAIN_JSON_ERROR_ILLEGAL_CHAR) {
         abort();
     }
 }

@@ -1,9 +1,10 @@
-#include "json_common.h"
-
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define PLAIN_JSON_IMPLEMENTATION
+#include "../plain_json.h"
 
 #define PRINT_ONLY_FAILURE 1
 
@@ -14,7 +15,6 @@ typedef struct {
 
 const TestCase test_parsing_cases[] = {
     /* Implementation defined */
-    /* TODO: Decide how to handle surrogates */
     { "i_number_double_huge_neg_exp.json", PLAIN_JSON_DONE },
     { "i_number_huge_exp.json", PLAIN_JSON_DONE },
     { "i_number_neg_int_huge_exp.json", PLAIN_JSON_DONE },
@@ -26,7 +26,7 @@ const TestCase test_parsing_cases[] = {
     { "i_number_too_big_pos_int.json", PLAIN_JSON_DONE },
     { "i_number_very_big_negative_int.json", PLAIN_JSON_DONE },
 
-    { "i_object_key_lone_2nd_surrogate.json", PLAIN_JSON_DONE },
+    { "i_object_key_lone_2nd_surrogate.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE },
     { "i_string_1st_surrogate_but_2nd_missing.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE },
     { "i_string_1st_valid_surrogate_2nd_invalid.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE },
     { "i_string_UTF-16LE_with_BOM.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE},
@@ -40,7 +40,7 @@ const TestCase test_parsing_cases[] = {
     { "i_string_invalid_surrogate.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE},
     { "i_string_invalid_utf-8.json", PLAIN_JSON_ERROR_STRING_UTF8_INVALID },
     { "i_string_inverted_surrogates_U+1D11E.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE},
-    { "i_string_iso_latin_1.json", -1 },
+    { "i_string_iso_latin_1.json", PLAIN_JSON_ERROR_STRING_UTF8_INVALID },
     { "i_string_lone_second_surrogate.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE},
     { "i_string_lone_utf8_continuation_byte.json", PLAIN_JSON_ERROR_STRING_UTF8_INVALID },
     { "i_string_not_in_unicode_range.json", PLAIN_JSON_ERROR_STRING_UTF8_INVALID },
@@ -48,8 +48,8 @@ const TestCase test_parsing_cases[] = {
     { "i_string_overlong_sequence_6_bytes.json", PLAIN_JSON_ERROR_STRING_UTF8_INVALID },
     { "i_string_overlong_sequence_6_bytes_null.json", PLAIN_JSON_ERROR_STRING_UTF8_INVALID },
     { "i_string_truncated-utf-8.json", PLAIN_JSON_ERROR_STRING_UTF8_INVALID },
-    { "i_string_utf16BE_no_BOM.json", -1 },
-    { "i_string_utf16LE_no_BOM.json", -1 },
+    { "i_string_utf16BE_no_BOM.json", PLAIN_JSON_ERROR_STRING_UTF8_INVALID },
+    { "i_string_utf16LE_no_BOM.json", PLAIN_JSON_ERROR_STRING_UTF8_INVALID },
     { "i_structure_500_nested_arrays.json", PLAIN_JSON_ERROR_NESTING_TOO_DEEP },
     { "i_structure_UTF-8_BOM_empty_object.json", PLAIN_JSON_ERROR_ILLEGAL_CHAR },
 
@@ -344,18 +344,14 @@ const TestCase test_parsing_cases[] = {
     { "y_structure_whitespace_array.json", PLAIN_JSON_DONE },
 };
 
-#define ANSI_DIM   "\033[2m"
-#define ANSI_RESET "\033[0m"
+#define ANSI_DIM   "\x1b[2m"
+#define ANSI_RESET "\x1b[0m"
 
-#define ANSI_BLACK   "\033[30m"
-#define ANSI_RED     "\033[31m"
-#define ANSI_GREEN   "\033[32m"
-#define ANSI_YELLOW  "\033[33m"
-#define ANSI_BLUE    "\033[34m"
-#define ANSI_MAGENTA "\033[35m"
-#define ANSI_CYAN    "\033[36m"
-#define ANSI_WHITE   "\033[37m"
-#define ANSI_DEFAULT "\033[38m"
+#define ANSI_RED     "\x1b[31m"
+#define ANSI_GREEN   "\x1b[32m"
+#define ANSI_YELLOW  "\x1b[33m"
+#define ANSI_BLUE    "\x1b[34m"
+#define ANSI_CYAN    "\x1b[36m"
 
 #define PATH_BUFFER_SIZE  256
 #define TOKEN_BUFFER_SIZE 64
@@ -390,31 +386,30 @@ int main(void) {
             goto on_error;
         }
 
-        plain_json_Context context = { 0 };
         plain_json_ErrorType result = PLAIN_JSON_HAS_REMAINING;
         plain_json_AllocatorConfig alloc_config = {
             .free_func = free,
             .alloc_func = malloc,
             .realloc_func = realloc
         };
-        result = plain_json_parse(&context, alloc_config, text_buffer, text_size);
+        plain_json_Context *context = plain_json_parse(alloc_config, (u8*)text_buffer, text_size, &result);
 
         int passed = 0;
         int report_string_index = 0;
         static const char *report_string[] = {
-            ANSI_GREEN "SUCCESS" ANSI_RESET,          ANSI_RED "FAILURE" ANSI_RESET,
-            ANSI_YELLOW "PARTIAL_FAILURE" ANSI_RESET, ANSI_BLUE "UNDEFINDED_SUCCESS" ANSI_RESET,
-            ANSI_CYAN "UNDEFINED_FAILURE" ANSI_RESET,
+            ANSI_GREEN "success" ANSI_RESET,          ANSI_RED "failure" ANSI_RESET,
+            ANSI_YELLOW "partial_failure" ANSI_RESET, ANSI_BLUE "undefinded_success" ANSI_RESET,
+            ANSI_CYAN "undefined_failure" ANSI_RESET,
         };
 
         switch (test_case.filename[0]) {
             // valid:
-            //      - The test succeeded [SUCCESS]
-            //      - The test failed    [FAILURE]
+            //      - The test succeeded [success]
+            //      - The test failed    [failure]
             // invalid:
-            //      - The test succeeded [FAILURE]
-            //      - The test failed and the error matche [SUCCESS]
-            //      - The test failed and the error does not match [PARTIAL_FAILURE]
+            //      - The test succeeded [failure]
+            //      - The test failed and the error matche [success]
+            //      - The test failed and the error does not match [partial_failure]
             // undefined:
             //      - The test succeeded
             //      - The test failed
@@ -453,16 +448,16 @@ int main(void) {
                 report_string[report_string_index], plain_json_error_to_string(result),
                 plain_json_error_to_string(test_case.expected_result)
             );
-            if (!passed) {
-                printf("%s\n", text_buffer);
-            }
+            /*if (!passed) {*/
+            /*    printf("%s\n", text_buffer);*/
+            /*}*/
         }
 #else
         printf("{\"%s\", %s},\n", test_case.filename, plain_json_error_to_string(result));
 #endif
 
         free(text_buffer);
-        plain_json_free(&context);
+        plain_json_free(context);
         fclose(text_file);
     }
 
