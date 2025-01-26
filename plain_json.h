@@ -34,6 +34,8 @@ typedef enum {
     PLAIN_JSON_ERROR_NUMBER_INVALID_EXPO,
     PLAIN_JSON_ERROR_NUMBER_INVALID_SIGN,
     PLAIN_JSON_ERROR_NUMBER_INVALID_DECIMAL,
+    PLAIN_JSON_ERROR_NUMBER_OVERFLOW,
+    PLAIN_JSON_ERROR_NUMBER_UNDERFLOW,
 
     PLAIN_JSON_ERROR_KEYWORD_INVALID,
 
@@ -66,11 +68,15 @@ typedef enum {
     PLAIN_JSON_TYPE_FLOAT64,
 } plain_json_Type;
 
-typedef unsigned long u32;
-typedef signed long i32;
+// FIXME: The usage of u32/usize/isize is inconsistent
 typedef unsigned char u8;
 typedef signed char i8;
-typedef unsigned long usize;
+
+typedef unsigned long u32;
+typedef signed long i32;
+
+typedef unsigned long long usize;
+typedef signed long long isize;
 
 typedef unsigned char bool;
 #define true  1
@@ -86,8 +92,8 @@ typedef struct {
     u32 key_index;
     plain_json_Type type;
     union {
-        u32 string_index;
-        int integer;
+        usize string_index;
+        isize integer;
         float real32;
         double real64;
         bool boolean;
@@ -114,6 +120,7 @@ extern u32 plain_json_get_token_count(plain_json_Context *context);
 extern const u8 *plain_json_get_key(plain_json_Context *context, u32 key_index);
 extern const u8 *plain_json_get_string(plain_json_Context *context, u32 string_index);
 
+extern bool plain_json_compute_position(plain_json_Context *context, u32 offset, u32 *line, u32 *line_offset);
 extern const char *plain_json_error_to_string(plain_json_ErrorType type);
 extern const char *plain_json_type_to_string(plain_json_Type type);
 
@@ -532,21 +539,20 @@ plain_json_intern_read_number(plain_json_Context *context, plain_json_Token *tok
         READ_EXPO,
     } status = READ_INT;
 
+    static const isize int_max = 9223372036854775807;
+
     const u8 *buffer = context->buffer + context->buffer_offset;
     usize buffer_size = context->buffer_size - context->buffer_offset;
     usize offset = 0;
 
-    /* TODO: Actually parse numbers */
-    u32 int_has_sign = 0;
-    u32 int_start = 0;
-    __attribute__((unused)) u32 int_length = 0;
+    u8 int_has_sign = 0;
+    isize int_value = 0;
+
+    u8 expo_has_sign = 0;
+    isize expo_value = 0;
 
     __attribute__((unused)) u32 decimal_start = 0;
     __attribute__((unused)) u32 decimal_length = 0;
-
-    __attribute__((unused)) u32 expo_has_sign = 0;
-    __attribute__((unused)) u32 expo_start = 0;
-    __attribute__((unused)) u32 expo_length = 0;
 
     while (offset < buffer_size) {
         switch (buffer[offset]) {
@@ -566,21 +572,47 @@ plain_json_intern_read_number(plain_json_Context *context, plain_json_Token *tok
         case '7':
         case '8':
         case '9':
-            if (status == READ_INT && offset + 1 < buffer_size && buffer[offset + 1] == '.') {
-                status = READ_DECIMAL;
-                decimal_start = offset + 1;
-                offset += 1;
-                int_length = offset - int_start;
+            if (status == READ_INT) {
+                if(!int_has_sign) {
+                    if(int_value > (int_max / 10) || (int_value == (int_max / 10) && buffer[offset] > '7')) {
+                        return PLAIN_JSON_ERROR_NUMBER_OVERFLOW;
+                    }
 
-                if (offset + 1 < buffer_size && !is_digit(buffer[offset + 1])) {
-                    return PLAIN_JSON_ERROR_NUMBER_INVALID_DECIMAL;
+                    int_value *= 10;
+                    int_value += buffer[offset] - '0';
+                } else {
+                    if(int_value < (int_max / 10) * -1 || (int_value == (int_max / 10) * -1 && buffer[offset] > '8')) {
+                        return PLAIN_JSON_ERROR_NUMBER_UNDERFLOW;
+                    }
+
+                    int_value *= 10;
+                    int_value -= buffer[offset] - '0';
                 }
+
+                if (offset + 1 < buffer_size && buffer[offset + 1] == '.') {
+                    status = READ_DECIMAL;
+                    decimal_start = offset + 1;
+                    offset += 1;
+
+                    if (offset + 1 < buffer_size && !is_digit(buffer[offset + 1])) {
+                        return PLAIN_JSON_ERROR_NUMBER_INVALID_DECIMAL;
+                    }
+                }
+            }
+
+            if(status == READ_EXPO) {
+                /* TODO: Make sure the resulting number (int/float * expo) can fit into the wordsize */
+                if(expo_value > (int_max / 10) || (int_value == (int_max / 10) && buffer[offset] > '7')) {
+                    return PLAIN_JSON_ERROR_NUMBER_OVERFLOW;
+                }
+
+                expo_value *= 10;
+                expo_value += buffer[offset] - '0';
             }
 
             break;
         case '-':
             if (status == READ_INT && offset == 0) {
-                int_start = offset + 1;
                 int_has_sign = 1;
                 if (offset + 1 < buffer_size && !is_digit(buffer[offset + 1])) {
                     return PLAIN_JSON_ERROR_NUMBER_INVALID_SIGN;
@@ -605,9 +637,7 @@ plain_json_intern_read_number(plain_json_Context *context, plain_json_Token *tok
                 return PLAIN_JSON_ERROR_UNEXPECTED_EOF;
             }
 
-            if (status == READ_INT) {
-                int_length = offset - int_start;
-            } else {
+            if (status != READ_INT) {
                 decimal_length = offset - decimal_start;
             }
 
@@ -621,7 +651,6 @@ plain_json_intern_read_number(plain_json_Context *context, plain_json_Token *tok
                 return PLAIN_JSON_ERROR_NUMBER_INVALID_EXPO;
             }
 
-            expo_start = offset + 1;
             status = READ_EXPO;
             break;
         default:
@@ -632,22 +661,15 @@ plain_json_intern_read_number(plain_json_Context *context, plain_json_Token *tok
     }
 
 done:;
-    usize expo_part = 0;
-    usize int_part = 0;
-    double float_part = 0;
-
-    if (decimal_start > 0) {
-        /* TODO: Implement floating point */
-    } else if(int_length > 0) {
-        for(u32 i = 0; i < int_length; i++) {
-            int_part += buffer[i] - '0';
-        }
-    }
-
-    if (expo_start > 0) {
-        for(u32 i = 0; i < offset - expo_start; i++) {
-            expo_part += buffer[expo_start + i] - '0';
-        }
+    switch (status) {
+    case READ_INT:
+        token->value.integer = int_value;
+        break;
+    case READ_DECIMAL:
+        token->value.real32 = 0;
+        break;
+    case READ_EXPO:
+        break;
     }
 
     token->length = offset;
@@ -954,7 +976,7 @@ u32 plain_json_get_token_count(plain_json_Context *context) {
     return context->token_buffer.buffer_size / context->token_buffer.item_size;
 }
 
-bool plain_json_intern_compute_position(
+bool plain_json_compute_position(
     plain_json_Context *context, u32 offset, u32 *line, u32 *line_offset
 ) {
     if (offset >= context->buffer_size) {
@@ -1029,6 +1051,10 @@ const char *plain_json_error_to_string(plain_json_ErrorType type) {
         return "number_invalid_exponent";
     case PLAIN_JSON_ERROR_NUMBER_INVALID_SIGN:
         return "number_invalid_sign";
+    case PLAIN_JSON_ERROR_NUMBER_OVERFLOW:
+        return "number_overflow";
+    case PLAIN_JSON_ERROR_NUMBER_UNDERFLOW:
+        return "number_underflow";
     case PLAIN_JSON_ERROR_NESTING_TOO_DEEP:
         return "nesting_too_deep";
     case PLAIN_JSON_ERROR_UNEXPECTED_ROOT:

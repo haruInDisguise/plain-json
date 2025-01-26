@@ -11,5 +11,10 @@ static plain_json_AllocatorConfig alloc_config = {
     .free_func = free,
     .realloc_func = realloc,
 };
+static plain_json_Context *context = NULL;
+
+static void test_finalize(void) {
+    plain_json_free(context);
+}
 
 #endif

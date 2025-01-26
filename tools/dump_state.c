@@ -13,7 +13,7 @@
 
 static void print_error(plain_json_Context *context, usize position, plain_json_ErrorType type) {
     u32 line, offset;
-    plain_json_intern_compute_position(context, position, &line, &offset);
+    plain_json_compute_position(context, position, &line, &offset);
     fprintf(stderr, "error: %s at %zu:%zu\n", plain_json_error_to_string(type), line, offset);
 }
 __attribute__((unused)) static void
@@ -88,18 +88,21 @@ static void dump(plain_json_Context *context, const plain_json_Token *token, u32
         );
     }
 
+    if (token->type == PLAIN_JSON_TYPE_INTEGER) {
+        offset += snprintf(buffer + offset, BUFFER_SIZE - offset, " = '%ld'", token->value.integer);
+    }
+
     /*dump_state(context, value_buffer, VALUE_BUFFER_SIZE);*/
     printf("%s\n", buffer);
 }
 
 int parse_json(u8 *buffer, unsigned long long buffer_size) {
     plain_json_ErrorType result = PLAIN_JSON_HAS_REMAINING;
-    plain_json_AllocatorConfig alloc_config = {
-        .free_func = free,
-        .alloc_func = malloc,
-        .realloc_func = realloc
-    };
-    plain_json_Context *context = plain_json_parse(alloc_config, (u8*)buffer, buffer_size, &result);
+    plain_json_AllocatorConfig alloc_config = { .free_func = free,
+                                                .alloc_func = malloc,
+                                                .realloc_func = realloc };
+    plain_json_Context *context =
+        plain_json_parse(alloc_config, (u8 *)buffer, buffer_size, &result);
 
     const u32 token_count = plain_json_get_token_count(context);
     u32 depth = 0;

@@ -21,7 +21,8 @@ INC_PATH = plain_json.h
 
 TEST_BIN = $(BUILD_DIR)/run_tests
 TEST_SRC = test/test_main.c \
-		   test/test_unicode.c
+		   test/test_unicode.c \
+		   test/test_number.c
 TEST_OBJ := $(patsubst %.c,$(BUILD_DIR)/%.o,$(TEST_SRC))
 
 DEP := $(patsubst %.c,$(BUILD_DIR)/%.d,$(TEST_SRC) $(TOOLS_SRC))

@@ -2,16 +2,14 @@
 
 #include "test_setup.h"
 
-SUIT(unicode, NULL, NULL);
+SUIT(unicode, NULL, test_finalize);
 
-#define TEST_UNICODE(name, result, encoded)                                    \
-    TEST(unicode, name) {                                                      \
-        const char *text = "[\"" encoded "\"]";                                \
-        plain_json_ErrorType status = PLAIN_JSON_DONE;                         \
-        plain_json_Context *context =                                          \
-            plain_json_parse(alloc_config, (u8 *)text, strlen(text), &status); \
-        test_assert_eq(status, result);                                        \
-        plain_json_free(context);                                              \
+#define TEST_UNICODE(name, result, encoded)                                          \
+    TEST(unicode, name) {                                                            \
+        const char *text = "[\"" encoded "\"]";                                      \
+        plain_json_ErrorType status = PLAIN_JSON_DONE;                               \
+        context = plain_json_parse(alloc_config, (u8 *)text, strlen(text), &status); \
+        test_assert_eq(status, result);                                              \
     }
 
 /* UTF-8 */
@@ -51,15 +49,13 @@ TEST_UNICODE(utf16_valid, PLAIN_JSON_DONE, "\\u2190\\u21AA\\u21B0")
     TEST(unicode, name) {                                                               \
         const char *text = "[\"" raw "\"]";                                             \
         plain_json_ErrorType status = PLAIN_JSON_DONE;                                  \
-        plain_json_Context *context =                                                   \
-            plain_json_parse(alloc_config, (u8 *)text, strlen(text), &status);          \
+        context = plain_json_parse(alloc_config, (u8 *)text, strlen(text), &status);    \
         test_assert_eq(status, PLAIN_JSON_DONE);                                        \
         const plain_json_Token *token = plain_json_get_token(context, 1);               \
         test_assert_ne(token, PLAIN_JSON_NULL);                                         \
         test_assert_string_eq(                                                          \
             (char *)plain_json_get_string(context, token->value.string_index), expected \
         );                                                                              \
-        plain_json_free(context);                                                       \
     }
 
 TEST_UNICODE_VALUE(parse_utf16_surrogate, "\\uD83D\\uDE11", "\xF0\x9F\x98\x91") /* 😑 */

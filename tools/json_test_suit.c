@@ -15,16 +15,16 @@ typedef struct {
 
 const TestCase test_parsing_cases[] = {
     /* Implementation defined */
-    { "i_number_double_huge_neg_exp.json", PLAIN_JSON_DONE },
-    { "i_number_huge_exp.json", PLAIN_JSON_DONE },
-    { "i_number_neg_int_huge_exp.json", PLAIN_JSON_DONE },
-    { "i_number_pos_double_huge_exp.json", PLAIN_JSON_DONE },
-    { "i_number_real_neg_overflow.json", PLAIN_JSON_DONE },
-    { "i_number_real_pos_overflow.json", PLAIN_JSON_DONE },
-    { "i_number_real_underflow.json", PLAIN_JSON_DONE },
-    { "i_number_too_big_neg_int.json", PLAIN_JSON_DONE },
-    { "i_number_too_big_pos_int.json", PLAIN_JSON_DONE },
-    { "i_number_very_big_negative_int.json", PLAIN_JSON_DONE },
+    { "i_number_double_huge_neg_exp.json", -1 },
+    { "i_number_huge_exp.json", -1 },
+    { "i_number_neg_int_huge_exp.json", -1 },
+    { "i_number_pos_double_huge_exp.json", -1 },
+    { "i_number_real_neg_overflow.json", PLAIN_JSON_ERROR_NUMBER_UNDERFLOW },
+    { "i_number_real_pos_overflow.json", PLAIN_JSON_ERROR_NUMBER_OVERFLOW },
+    { "i_number_real_underflow.json", PLAIN_JSON_ERROR_NUMBER_UNDERFLOW },
+    { "i_number_too_big_neg_int.json", PLAIN_JSON_ERROR_NUMBER_UNDERFLOW },
+    { "i_number_too_big_pos_int.json", PLAIN_JSON_ERROR_NUMBER_OVERFLOW },
+    { "i_number_very_big_negative_int.json", PLAIN_JSON_ERROR_NUMBER_UNDERFLOW },
 
     { "i_object_key_lone_2nd_surrogate.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE },
     { "i_string_1st_surrogate_but_2nd_missing.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE },

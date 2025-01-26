@@ -15,5 +15,6 @@ int main(int argc, char **argv) {
         return -1;
     }
     test_run_all();
+    test_exit();
     return 0;
 }
