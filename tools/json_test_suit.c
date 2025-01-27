@@ -4,7 +4,7 @@
 #include <string.h>
 
 #define PLAIN_JSON_IMPLEMENTATION
-#include "../plain_json.h"
+#include <plain_json.h>
 
 #define PRINT_ONLY_FAILURE 1
 

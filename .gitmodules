@@ -1,3 +1,0 @@
-[submodule "test/libtest"]
-	path = test/libtest
-	url = https://github.com/haruindisguise/libtest

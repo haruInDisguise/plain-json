@@ -9,7 +9,7 @@
 #include <sys/stat.h>
 
 #define PLAIN_JSON_IMPLEMENTATION
-#include "../plain_json.h"
+#include <plain_json.h>
 
 static void print_error(plain_json_Context *context, usize position, plain_json_ErrorType type) {
     u32 line, offset;
@@ -89,7 +89,7 @@ static void dump(plain_json_Context *context, const plain_json_Token *token, u32
     }
 
     if (token->type == PLAIN_JSON_TYPE_INTEGER) {
-        offset += snprintf(buffer + offset, BUFFER_SIZE - offset, " = '%ld'", token->value.integer);
+        offset += snprintf(buffer + offset, BUFFER_SIZE - offset, " = '%lld'", token->value.integer);
     }
 
     /*dump_state(context, value_buffer, VALUE_BUFFER_SIZE);*/

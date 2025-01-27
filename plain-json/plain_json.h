@@ -14,7 +14,12 @@
 #define PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE 0x20
 #define PLAIN_JSON_STATE_NEEDS_COLON       0x40
 
+/// If the error_code is not equal to PLAIN_JSON_DONE, the parser encountered an issue.
+/// "plain-json" tries to be explicit when it comes to error handeling, meaning most
+/// uniq parsing issues have there own error code.
 typedef enum {
+    PLAIN_JSON_NONE,
+
     PLAIN_JSON_DONE,
     PLAIN_JSON_HAS_REMAINING,
 
@@ -48,6 +53,7 @@ typedef enum {
     PLAIN_JSON_ERROR_ILLEGAL_CHAR,
 } plain_json_ErrorType;
 
+/// The token type.
 typedef enum {
     PLAIN_JSON_TYPE_INVALID,
     PLAIN_JSON_TYPE_ERROR,
@@ -85,13 +91,21 @@ typedef unsigned char bool;
 #define PLAIN_JSON_NO_KEY (-1UL)
 #define PLAIN_JSON_NULL   (void *)0
 
+/// A tokens fields describe its layout. All fields can (and should) be
+/// accessed directly. The library only hands out const references whom
+/// should be treated as such.
 typedef struct {
     u32 start;
     u32 length;
 
+    /// The internal index of this tokens key value.
+    /// Should be passed to 'plain_json_get_key()'
     u32 key_index;
+    /// Check the type to resolve out the value union.
     plain_json_Type type;
     union {
+        /// The internal index of this tokens string value (if any).
+        /// See 'plain_json_get_string()'
         usize string_index;
         isize integer;
         float real32;
@@ -100,28 +114,48 @@ typedef struct {
     } value;
 } plain_json_Token;
 
+/// The parser requires "libc compatible (malloc/free/realloc)" allocator functions
 typedef struct {
-    void *(*alloc_func)(usize size);
-    void *(*realloc_func)(void *buffer, usize new_size);
+    void *(*alloc_func)(u32 size);
+    void *(*realloc_func)(void *buffer, u32 size);
     void (*free_func)(void *buffer);
 } plain_json_AllocatorConfig;
 
+/// The context represents the parsers internal state and is required by most
+/// library functions.
 typedef struct plain_json_Context plain_json_Context;
 
+/// Fully parse the given text buffer. The function requires a "plain_json_ErrorType"
+/// argument that should be initialized to "PLAIN_JSON_NONE".
+/// Check the last token to track down the errors exact position.
 extern plain_json_Context *plain_json_parse(
     plain_json_AllocatorConfig alloc_config, const u8 *buffer,
     u32 buffer_size, plain_json_ErrorType *error
 );
+/// Release the internal state, after processing the parsing results.
 extern void plain_json_free(plain_json_Context *context);
 
-extern const plain_json_Token *plain_json_get_token(plain_json_Context *context, u32 index);
+/// Get the total token count.
 extern u32 plain_json_get_token_count(plain_json_Context *context);
+/// Get a specific token, given its index. Tokens are stored in order.
+extern const plain_json_Token *plain_json_get_token(plain_json_Context *context, u32 index);
 
+/// Get a tokens key (if any), given a tokens "key_index" field.
+/// Returns NULL if the token does not have a key.
 extern const u8 *plain_json_get_key(plain_json_Context *context, u32 key_index);
+/// Get the value of a token with type string. Any other type will
+/// produce misleadingerrornous results.
+/// Returns NULL if the string index is invalid.
 extern const u8 *plain_json_get_string(plain_json_Context *context, u32 string_index);
 
+/// Turn a tokens offset field into an absolute position.
+/// Requires a "line" and "line_offset" argument to store the result.
+/// Returns false if the offset is beyond the raw jsons size.
+/// This function is useful to track down the exact position of an error token.
 extern bool plain_json_compute_position(plain_json_Context *context, u32 offset, u32 *line, u32 *line_offset);
+/// Turn an error code into its string representation.
 extern const char *plain_json_error_to_string(plain_json_ErrorType type);
+/// Turn a type into its string representation.
 extern const char *plain_json_type_to_string(plain_json_Type type);
 
 #endif
@@ -159,8 +193,8 @@ typedef struct {
 struct plain_json_Context {
     const u8 *buffer;
 
-    usize buffer_size;
-    usize buffer_offset;
+    u32 buffer_size;
+    u32 buffer_offset;
 
     u8 depth_buffer_index;
     u8 depth_buffer[PLAIN_JSON_OPTION_MAX_DEPTH];
@@ -548,7 +582,7 @@ plain_json_intern_read_number(plain_json_Context *context, plain_json_Token *tok
     u8 int_has_sign = 0;
     isize int_value = 0;
 
-    u8 expo_has_sign = 0;
+    __attribute__((unused)) u8 expo_has_sign = 0;
     isize expo_value = 0;
 
     __attribute__((unused)) u32 decimal_start = 0;
@@ -1073,10 +1107,12 @@ const char *plain_json_error_to_string(plain_json_ErrorType type) {
         return "string_invalid_escape";
     case PLAIN_JSON_HAS_REMAINING:
         return "parsing_has_remaining";
-    case PLAIN_JSON_DONE:
-        return "done";
     case PLAIN_JSON_ERROR_NO_MEMORY:
         return "no_memory";
+    case PLAIN_JSON_DONE:
+        return "done";
+    case PLAIN_JSON_NONE:
+        return "none";
     }
 
     return "unknown_error";

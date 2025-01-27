@@ -1,4 +1,5 @@
 build
 samples
+subprojects/libtest
 
 .cache
