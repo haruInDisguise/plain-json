@@ -1,6 +1,6 @@
 project('plain-json', 'c',
   version: '0.1.0',
-  license: 'TODO',
+  license: 'MIT',
   meson_version: '>=0.59.0',
   default_options: [
     'c_std=c99',
