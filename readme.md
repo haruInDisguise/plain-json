@@ -50,6 +50,8 @@ dependency_names = 'plain-json'
 
 2. and then integrate it into your build setup:
 ```meson
+# meson.build
+
 plain_json_dep = dependency('plain-json', required: true)
 
 my_exe = executable(..., dependencies: [ plain_json_dep, ... ])
@@ -57,8 +59,7 @@ my_exe = executable(..., dependencies: [ plain_json_dep, ... ])
 
 ### Parsing/Deserialization
 
-> [!TIP]
-> The API is documented in-source at [plain_json.h](/blob/main/plain_json.h)
+> The API is documented in-source at [plain_json.h](/blob/main/plain-json/plain_json.h)
 
 ```c
 // While the library itself does not have any dependencies,
@@ -148,8 +149,7 @@ This process builds the folowing binaries:
 
 ## Development
 At this point, this is mostly a hobby project, born out of curiosity and too much free time.
-There are still a few features I want to implement (see ["What it needs"](#todo).
-I want to keep this project small and to the point.
+There are still a few features I want to implement.
 
 ## Resources
 
@@ -160,6 +160,3 @@ I want to keep this project small and to the point.
 - UTF-8 Wiki: https://en.wikipedia.org/wiki/UTF-8
 - UTF-16 Wiki: https://en.wikipedia.org/wiki/UTF-16
 - "Unicode Encoding! [...]" by EmNudge: https://www.youtube.com/watch?v=uTJoJtNYcaQ&t=2s
-
-While working on this project I've dug through the source of several existing JSON parsing librarys:
-TODO: Include links to: cJSON, RapidJSON, yyjson, simdjson
