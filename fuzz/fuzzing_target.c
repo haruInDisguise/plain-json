@@ -1,23 +1,27 @@
-#include <stdlib.h>
-#include <unistd.h>
-
 #define PLAIN_JSON_IMPLEMENTATION
-#include "../plain_json.h"
+#include "../plain-json/plain_json.h"
+
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 #pragma clang optimize off
 
-void parse_json(u8 *buffer, size_t buffer_length) {
-    plain_json_Context context = { 0 };
+void parse_json(uint8_t *buffer, intptr_t buffer_length) {
     plain_json_AllocatorConfig alloc_config = {
         .alloc_func = malloc,
         .realloc_func = realloc,
         .free_func = free,
     };
 
-    plain_json_ErrorType state = plain_json_parse(&context, alloc_config, buffer, buffer_length);
-    if(state < 0 || state > PLAIN_JSON_ERROR_ILLEGAL_CHAR) {
+    plain_json_ErrorType state = PLAIN_JSON_NONE;
+
+    plain_json_Context *context = plain_json_parse(alloc_config, buffer, buffer_length, &state);
+    if (state < 0 || state > PLAIN_JSON_ERROR_ILLEGAL_CHAR) {
         abort();
     }
+
+    plain_json_free(context);
 }
 
 __AFL_FUZZ_INIT();
@@ -28,18 +32,15 @@ int main(void) {
     // https://github.com/AFLplusplus/AFLplusplus/blob/stable/instrumentation/README.persistent_mode.md#3-deferred-initialization
     __AFL_INIT();
 
-    unsigned char *buf = __AFL_FUZZ_TESTCASE_BUF; // must be after __AFL_INIT
-                                                  // and before __AFL_LOOP!
+    uint8_t *fuzz_buffer = __AFL_FUZZ_TESTCASE_BUF; // must be after __AFL_INIT
+
+    // and before __AFL_LOOP!
     while (__AFL_LOOP(10000)) {
-        int len = __AFL_FUZZ_TESTCASE_LEN; // don't use the macro directly in a
-                                           // call!
+        uint32_t case_length = __AFL_FUZZ_TESTCASE_LEN; // don't use the macro directly in a
 
-        if (len < 2) {
-            continue; // check for a required/useful minimum input length
-                      // the smallest valid json token is an empty array/object
-        }
-
-        parse_json(buf, len);
+        uint8_t *case_buffer = malloc(case_length);
+        memcpy(case_buffer, fuzz_buffer, case_length);
+        parse_json(case_buffer, case_length);
     }
 
     return 0;

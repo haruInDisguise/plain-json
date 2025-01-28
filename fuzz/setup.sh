@@ -1,6 +1,6 @@
 # To be sourced by the shell that starts a new fuzzing session
 
-AFL_PATH="/opt/dev/tools/AFLplusplus/afl_build_root/usr/local/bin"
+AFL_PATH="$HOME/projects/ctfs_and_challenges/Fuzzing101/afl_build_root/usr/local/bin"
 if [ -d "$AFL_PATH" ] && ! command -v afl-fuzz >/dev/null 2>&1; then
     echo "Adding AFL binaries to path"
     PATH="$AFL_PATH:$PATH"
