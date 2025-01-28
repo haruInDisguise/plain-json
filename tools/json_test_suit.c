@@ -392,7 +392,7 @@ int main(void) {
             .alloc_func = malloc,
             .realloc_func = realloc
         };
-        plain_json_Context *context = plain_json_parse(alloc_config, (u8*)text_buffer, text_size, &result);
+        plain_json_Context *context = plain_json_parse(alloc_config, (uint8_t*)text_buffer, text_size, &result);
 
         int passed = 0;
         int report_string_index = 0;

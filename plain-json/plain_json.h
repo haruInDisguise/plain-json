@@ -1,3 +1,6 @@
+#include <stdint.h>
+#include <stdbool.h>
+
 #ifndef _PLAIN_JSON_H_
 #define _PLAIN_JSON_H_
 
@@ -74,40 +77,26 @@ typedef enum {
     PLAIN_JSON_TYPE_FLOAT64,
 } plain_json_Type;
 
-// FIXME: The usage of u32/usize/isize is inconsistent
-typedef unsigned char u8;
-typedef signed char i8;
-
-typedef unsigned long u32;
-typedef signed long i32;
-
-typedef unsigned long long usize;
-typedef signed long long isize;
-
-typedef unsigned char bool;
-#define true  1
-#define false 0
-
-#define PLAIN_JSON_NO_KEY (-1UL)
+#define PLAIN_JSON_NO_KEY (-1U)
 #define PLAIN_JSON_NULL   (void *)0
 
 /// A tokens fields describe its layout. All fields can (and should) be
-/// accessed directly. The library only hands out const references whom
-/// should be treated as such.
+/// accessed directly. The library only hands out const references that
+/// should be considered as read-only
 typedef struct {
-    u32 start;
-    u32 length;
+    uintptr_t start;
+    uint32_t length;
 
     /// The internal index of this tokens key value.
     /// Should be passed to 'plain_json_get_key()'
-    u32 key_index;
+    uint32_t key_index;
     /// Check the type to resolve out the value union.
     plain_json_Type type;
     union {
         /// The internal index of this tokens string value (if any).
         /// See 'plain_json_get_string()'
-        usize string_index;
-        isize integer;
+        uint32_t string_index;
+        uint64_t integer;
         float real32;
         double real64;
         bool boolean;
@@ -116,8 +105,8 @@ typedef struct {
 
 /// The parser requires "libc compatible (malloc/free/realloc)" allocator functions
 typedef struct {
-    void *(*alloc_func)(u32 size);
-    void *(*realloc_func)(void *buffer, u32 size);
+    void *(*alloc_func)(uintptr_t size);
+    void *(*realloc_func)(void *buffer, uintptr_t size);
     void (*free_func)(void *buffer);
 } plain_json_AllocatorConfig;
 
@@ -129,30 +118,30 @@ typedef struct plain_json_Context plain_json_Context;
 /// argument that should be initialized to "PLAIN_JSON_NONE".
 /// Check the last token to track down the errors exact position.
 extern plain_json_Context *plain_json_parse(
-    plain_json_AllocatorConfig alloc_config, const u8 *buffer,
-    u32 buffer_size, plain_json_ErrorType *error
+    plain_json_AllocatorConfig alloc_config, const uint8_t *buffer,
+    uintptr_t buffer_size, plain_json_ErrorType *error
 );
 /// Release the internal state, after processing the parsing results.
 extern void plain_json_free(plain_json_Context *context);
 
 /// Get the total token count.
-extern u32 plain_json_get_token_count(plain_json_Context *context);
+extern uint32_t plain_json_get_token_count(plain_json_Context *context);
 /// Get a specific token, given its index. Tokens are stored in order.
-extern const plain_json_Token *plain_json_get_token(plain_json_Context *context, u32 index);
+extern const plain_json_Token *plain_json_get_token(plain_json_Context *context, uint32_t index);
 
 /// Get a tokens key (if any), given a tokens "key_index" field.
 /// Returns NULL if the token does not have a key.
-extern const u8 *plain_json_get_key(plain_json_Context *context, u32 key_index);
+extern const uint8_t *plain_json_get_key(plain_json_Context *context, uint32_t key_index);
 /// Get the value of a token with type string. Any other type will
 /// produce misleadingerrornous results.
 /// Returns NULL if the string index is invalid.
-extern const u8 *plain_json_get_string(plain_json_Context *context, u32 string_index);
+extern const uint8_t *plain_json_get_string(plain_json_Context *context, uint32_t string_index);
 
 /// Turn a tokens offset field into an absolute position.
 /// Requires a "line" and "line_offset" argument to store the result.
 /// Returns false if the offset is beyond the raw jsons size.
 /// This function is useful to track down the exact position of an error token.
-extern bool plain_json_compute_position(plain_json_Context *context, u32 offset, u32 *line, u32 *line_offset);
+extern bool plain_json_compute_position(plain_json_Context *context, uintptr_t offset, uint32_t *line, uint32_t *line_offset);
 /// Turn an error code into its string representation.
 extern const char *plain_json_error_to_string(plain_json_ErrorType type);
 /// Turn a type into its string representation.
@@ -185,43 +174,43 @@ extern const char *plain_json_type_to_string(plain_json_Type type);
 #define is_hex(c)   ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (is_digit(c)))
 
 typedef struct {
-    u8 *buffer;
-    u32 buffer_size;
-    u32 item_size;
+    uint8_t *buffer;
+    uint8_t item_size;
+    uintptr_t buffer_size;
 } plain_json_List;
 
 struct plain_json_Context {
-    const u8 *buffer;
+    const uint8_t *buffer;
 
-    u32 buffer_size;
-    u32 buffer_offset;
+    uintptr_t buffer_size;
+    uintptr_t buffer_offset;
 
-    u8 depth_buffer_index;
-    u8 depth_buffer[PLAIN_JSON_OPTION_MAX_DEPTH];
+    uint8_t depth_buffer_index;
+    uint8_t depth_buffer[PLAIN_JSON_OPTION_MAX_DEPTH];
 
     plain_json_AllocatorConfig alloc_config;
     plain_json_List string_buffer;
     plain_json_List token_buffer;
 };
 
-static void *plain_json_intern_memset(void *start, int value, usize length) {
+static void *plain_json_intern_memset(void *start, int value, uintptr_t length) {
     while (length--) {
-        ((u8 *)start)[length] = (u8)value;
+        ((uint8_t *)start)[length] = (uint8_t)value;
     }
 
     return start;
 }
 
-static void *plain_json_intern_memcpy(void *dest, const void *src, usize length) {
+static void *plain_json_intern_memcpy(void *dest, const void *src, uintptr_t length) {
     while (length--) {
-        ((u8 *)dest)[length] = ((u8 *)src)[length];
+        ((uint8_t *)dest)[length] = ((uint8_t *)src)[length];
     }
 
     return dest;
 }
 
 static inline bool plain_json_intern_list_append(
-    plain_json_List *list, plain_json_AllocatorConfig *config, void *raw_data, u32 count
+    plain_json_List *list, plain_json_AllocatorConfig *config, void *raw_data, uint32_t count
 ) {
     list->buffer = config->realloc_func(list->buffer, list->buffer_size + list->item_size * count);
     if (list->buffer == PLAIN_JSON_NULL) {
@@ -234,20 +223,20 @@ static inline bool plain_json_intern_list_append(
 }
 
 /* TODO: come up with a way of accessing the text buffer that feels less akward */
-static inline bool plain_json_intern_has_next(plain_json_Context *context, usize offset) {
+static inline bool plain_json_intern_has_next(plain_json_Context *context, uintptr_t offset) {
     return (context->buffer_offset + offset < context->buffer_size);
 }
 
 /* TODO: come up with a way of accessing the text buffer that feels less akward */
-static inline u8 plain_json_intern_consume(plain_json_Context *context, usize count) {
+static inline uint8_t plain_json_intern_consume(plain_json_Context *context, uintptr_t count) {
     json_assert(context->buffer_offset + count <= context->buffer_size);
-    u8 tmp = context->buffer[context->buffer_offset];
+    uint8_t tmp = context->buffer[context->buffer_offset];
     context->buffer_offset += count;
     return tmp;
 }
 
 /* TODO: come up with a way of accessing the text buffer that feels less akward */
-static inline u8 plain_json_intern_peek(plain_json_Context *context, usize offset) {
+static inline uint8_t plain_json_intern_peek(plain_json_Context *context, uintptr_t offset) {
     json_assert(context->buffer_offset + offset < context->buffer_size);
     return context->buffer[context->buffer_offset + offset];
 }
@@ -255,19 +244,19 @@ static inline u8 plain_json_intern_peek(plain_json_Context *context, usize offse
 /* Parsing */
 
 static inline bool
-plain_json_intern_parse_utf16(const u8 *buffer, const usize buffer_size, u32 *codepoint) {
+plain_json_intern_parse_utf16(const uint8_t *buffer, const uintptr_t buffer_size, uint32_t *codepoint) {
     if (4 >= buffer_size) {
         return false;
     }
 
-    for (u32 i = 0; i < 4; i++) {
-        u32 shift = 4 * (3 - i);
+    for (uint32_t i = 0; i < 4; i++) {
+        uint32_t shift = 4 * (3 - i);
         if (buffer[i] >= 'a' && buffer[i] <= 'f') {
-            (*codepoint) |= (((u32)buffer[i] - 'a' + 10) & 0xff) << shift;
+            (*codepoint) |= (((uint32_t)buffer[i] - 'a' + 10) & 0xff) << shift;
         } else if (buffer[i] >= 'A' && buffer[i] <= 'F') {
-            (*codepoint) |= (((u32)buffer[i] - 'A' + 10) & 0xff) << shift;
+            (*codepoint) |= (((uint32_t)buffer[i] - 'A' + 10) & 0xff) << shift;
         } else if (buffer[i] >= '0' && buffer[i] <= '9') {
-            (*codepoint) |= (((u32)buffer[i] - '0') & 0xff) << shift;
+            (*codepoint) |= (((uint32_t)buffer[i] - '0') & 0xff) << shift;
         } else {
             return false;
         }
@@ -278,37 +267,37 @@ plain_json_intern_parse_utf16(const u8 *buffer, const usize buffer_size, u32 *co
 
 #define PLAIN_JSON_INTERN_STRING_CACHE 64
 static plain_json_ErrorType plain_json_intern_read_string(plain_json_Context *context) {
-    static const u32 surrogate_mask = 0x0000FC00;
-    static const u32 high_surrogate_layout = 0x0000D800;
-    static const u32 low_surrogate_layout = 0x0000DC00;
+    static const uint32_t surrogate_mask = 0x0000FC00;
+    static const uint32_t high_surrogate_layout = 0x0000D800;
+    static const uint32_t low_surrogate_layout = 0x0000DC00;
 
-    static const u32 utf8_surrogate_mask = 0x0F200000;
-    static const u32 utf8_surrogate_layout = 0x0D200000;
-    static const u32 seq4_range_mask = 0x07300000;
-    static const u32 seq4_pattern_mask = 0x04000000;
+    static const uint32_t utf8_surrogate_mask = 0x0F200000;
+    static const uint32_t utf8_surrogate_layout = 0x0D200000;
+    static const uint32_t seq4_range_mask = 0x07300000;
+    static const uint32_t seq4_pattern_mask = 0x04000000;
 
-    static const u32 header_mask[4] = {
+    static const uint32_t header_mask[4] = {
         0x80000000,
         0xE0C00000,
         0xF0C0C000,
         0xF8C0C0C0,
     };
 
-    static const u32 header_layout[4] = {
+    static const uint32_t header_layout[4] = {
         0x00000000,
         0xC0800000,
         0xE0808000,
         0xF0808080,
     };
 
-    static const u32 range_mask[4] = {
+    static const uint32_t range_mask[4] = {
         0x7F000000,
         0x1E000000,
         0x0F200000,
         0x07300000,
     };
 
-    static const u8 length_table[16] = {
+    static const uint8_t length_table[16] = {
         1, 1, 1, 1, 1, 1, 1, 1, /* 0... */
         1, 1, 1, 1,             /* 10.. continuation byte, invalid */
         2, 2,                   /* 110. */
@@ -316,14 +305,14 @@ static plain_json_ErrorType plain_json_intern_read_string(plain_json_Context *co
         4,                      /* 1111 or invalid */
     };
 
-    const u8 *buffer = context->buffer + context->buffer_offset;
-    const u32 buffer_size = context->buffer_size - context->buffer_offset;
+    const uint8_t *buffer = context->buffer + context->buffer_offset;
+    const uintptr_t buffer_size = context->buffer_size - context->buffer_offset;
 
-    u8 cache[PLAIN_JSON_INTERN_STRING_CACHE] = { 0 };
-    u32 cache_offset = 0;
+    uint8_t cache[PLAIN_JSON_INTERN_STRING_CACHE] = { 0 };
+    uint32_t cache_offset = 0;
 
-    u32 offset = 0;
-    u8 current_char = '\0';
+    uintptr_t offset = 0;
+    uint8_t current_char = '\0';
 
     while (offset < buffer_size) {
         current_char = buffer[offset];
@@ -365,8 +354,8 @@ static plain_json_ErrorType plain_json_intern_read_string(plain_json_Context *co
         }
 
         /* Read UTF-8 */
-        u8 seq_length = length_table[current_char >> 4];
-        u32 value = 0;
+        uint8_t seq_length = length_table[current_char >> 4];
+        uint32_t value = 0;
 
         if (offset + seq_length >= buffer_size) {
             return PLAIN_JSON_ERROR_STRING_UTF8_INVALID;
@@ -374,16 +363,19 @@ static plain_json_ErrorType plain_json_intern_read_string(plain_json_Context *co
 
         switch (seq_length) {
         case 4:
-            value |= (u32)buffer[offset + 3] & 0xff;
+            value |= (uint32_t)buffer[offset + 3] & 0xff;
             cache[cache_offset + 3] = buffer[offset + 3];
+            /* fallthrough */
         case 3:
-            value |= ((u32)buffer[offset + 2] & 0xff) << 8;
+            value |= ((uint32_t)buffer[offset + 2] & 0xff) << 8;
             cache[cache_offset + 2] = buffer[offset + 2];
+            /* fallthrough */
         case 2:
-            value |= ((u32)buffer[offset + 1] & 0xff) << 16;
+            value |= ((uint32_t)buffer[offset + 1] & 0xff) << 16;
             cache[cache_offset + 1] = buffer[offset + 1];
+            /* fallthrough */
         case 1:
-            value |= ((u32)current_char & 0xff) << 24;
+            value |= ((uint32_t)current_char & 0xff) << 24;
             cache[cache_offset] = buffer[offset];
             break;
         default:
@@ -444,7 +436,7 @@ static plain_json_ErrorType plain_json_intern_read_string(plain_json_Context *co
             offset++;
 
             /* Parse UTF-16 */
-            u32 codepoint = 0;
+            uint32_t codepoint = 0;
             if (offset + 4 >= buffer_size ||
                 !plain_json_intern_parse_utf16(buffer + offset, buffer_size - offset, &codepoint)) {
                 /* Error: Codepoint is invalid */
@@ -466,7 +458,7 @@ static plain_json_ErrorType plain_json_intern_read_string(plain_json_Context *co
                 }
                 offset += 2;
 
-                u32 high_surrogate = codepoint;
+                uint32_t high_surrogate = codepoint;
                 codepoint = 0;
                 if (offset + 4 >= buffer_size ||
                     !plain_json_intern_parse_utf16(
@@ -482,13 +474,13 @@ static plain_json_ErrorType plain_json_intern_read_string(plain_json_Context *co
                     return PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE;
                 }
 
-                u32 low_surrogate = codepoint;
+                uint32_t low_surrogate = codepoint;
                 codepoint = ((high_surrogate & 0x3FF) << 10) | (low_surrogate & 0x3FF);
                 codepoint += 0x10000;
             }
 
             /* Encode as UTF-8 */
-            u32 part = 0;
+            uint32_t part = 0;
             if (codepoint <= 0x07FF) {
                 part = codepoint;
                 cache[cache_offset] = 0xC0 | ((part >> 6) & 0x1F);
@@ -530,8 +522,8 @@ done:
 
 static inline plain_json_ErrorType
 plain_json_intern_read_keyword(plain_json_Context *context, plain_json_Token *token) {
-    const u8 *buffer = context->buffer + context->buffer_offset;
-    const u32 buffer_size = context->buffer_size - context->buffer_offset;
+    const uint8_t *buffer = context->buffer + context->buffer_offset;
+    const uintptr_t buffer_size = context->buffer_size - context->buffer_offset;
     json_assert(buffer[0] == 't' || buffer[0] == 'f' || buffer[0] == 'n');
 
     switch (buffer[0]) {
@@ -573,20 +565,20 @@ plain_json_intern_read_number(plain_json_Context *context, plain_json_Token *tok
         READ_EXPO,
     } status = READ_INT;
 
-    static const isize int_max = 9223372036854775807;
+    static const int64_t int_max = INT64_MAX;
 
-    const u8 *buffer = context->buffer + context->buffer_offset;
-    usize buffer_size = context->buffer_size - context->buffer_offset;
-    usize offset = 0;
+    const uint8_t *buffer = context->buffer + context->buffer_offset;
+    uintptr_t buffer_size = context->buffer_size - context->buffer_offset;
+    uintptr_t offset = 0;
 
-    u8 int_has_sign = 0;
-    isize int_value = 0;
+    uint8_t int_has_sign = 0;
+    int64_t int_value = 0;
 
-    __attribute__((unused)) u8 expo_has_sign = 0;
-    isize expo_value = 0;
+    __attribute__((unused)) uint8_t expo_has_sign = 0;
+    intptr_t expo_value = 0;
 
-    __attribute__((unused)) u32 decimal_start = 0;
-    __attribute__((unused)) u32 decimal_length = 0;
+    __attribute__((unused)) uint32_t decimal_start = 0;
+    __attribute__((unused)) uint32_t decimal_length = 0;
 
     while (offset < buffer_size) {
         switch (buffer[offset]) {
@@ -607,6 +599,9 @@ plain_json_intern_read_number(plain_json_Context *context, plain_json_Token *tok
         case '8':
         case '9':
             if (status == READ_INT) {
+                /* Check for over/underflow */
+
+                // FIXME: Depending on the wordsize, the int_max value might end in different digits (ie. i32 => '8', i64 => '7').
                 if(!int_has_sign) {
                     if(int_value > (int_max / 10) || (int_value == (int_max / 10) && buffer[offset] > '7')) {
                         return PLAIN_JSON_ERROR_NUMBER_OVERFLOW;
@@ -656,6 +651,7 @@ plain_json_intern_read_number(plain_json_Context *context, plain_json_Token *tok
             }
 
             /* '+/-' are consumed as part of the exponent token 'e' */
+            /* fallthrough */
         case '+':
             return PLAIN_JSON_ERROR_NUMBER_INVALID_SIGN;
             /* '.' is consumed as part of the int part */
@@ -675,13 +671,13 @@ plain_json_intern_read_number(plain_json_Context *context, plain_json_Token *tok
                 decimal_length = offset - decimal_start;
             }
 
-            u8 next_char = buffer[offset + 1];
+            uint8_t next_char = buffer[offset + 1];
             if (next_char == '+' || next_char == '-') {
                 offset += 1;
                 expo_has_sign = 1;
             }
 
-            if (!is_digit(buffer[offset + 1])) {
+            if (offset + 1 < buffer_size && !is_digit(buffer[offset + 1])) {
                 return PLAIN_JSON_ERROR_NUMBER_INVALID_EXPO;
             }
 
@@ -694,7 +690,7 @@ plain_json_intern_read_number(plain_json_Context *context, plain_json_Token *tok
         offset++;
     }
 
-done:;
+done:
     switch (status) {
     case READ_INT:
         token->value.integer = int_value;
@@ -753,7 +749,7 @@ plain_json_intern_read_token(plain_json_Context *context, plain_json_Token *toke
         token->start = context->buffer_offset;
         token->length = 1;
 
-        u8 current_char = plain_json_intern_peek(context, 0);
+        uint8_t current_char = plain_json_intern_peek(context, 0);
         switch (current_char) {
             /* Read blanks */
         case ' ':
@@ -931,8 +927,8 @@ plain_json_intern_read_token(plain_json_Context *context, plain_json_Token *toke
 }
 
 plain_json_Context *plain_json_parse(
-    plain_json_AllocatorConfig alloc_config, const u8 *buffer,
-    u32 buffer_size, plain_json_ErrorType *error
+    plain_json_AllocatorConfig alloc_config, const uint8_t *buffer,
+    uintptr_t buffer_size, plain_json_ErrorType *error
 ) {
     plain_json_Context *context = alloc_config.alloc_func(sizeof(*context));
     plain_json_intern_memset(context, 0, sizeof(*context));
@@ -946,7 +942,7 @@ plain_json_Context *plain_json_parse(
      * topmost/first parsed token */
     context->depth_buffer[0] = PLAIN_JSON_STATE_IS_FIRST_TOKEN;
 
-    context->buffer = (u8 *)buffer;
+    context->buffer = (uint8_t *)buffer;
     context->buffer_size = buffer_size;
 
     plain_json_ErrorType status = PLAIN_JSON_HAS_REMAINING;
@@ -982,11 +978,10 @@ void plain_json_free(plain_json_Context *context) {
         context->string_buffer.buffer = PLAIN_JSON_NULL;
     }
 
-    // This should be fine, since we no longer reference access the context upon calling free
     context->alloc_config.free_func(context);
 }
 
-static const  u8 *plain_json_list_get(plain_json_List *list, u32 index) {
+static const  uint8_t *plain_json_list_get(plain_json_List *list, uint32_t index) {
     if(index >= list->buffer_size / list->item_size) {
         return PLAIN_JSON_NULL;
     }
@@ -994,24 +989,24 @@ static const  u8 *plain_json_list_get(plain_json_List *list, u32 index) {
     return list->buffer + list->item_size * index;
 }
 
-const u8 *plain_json_get_key(plain_json_Context *context, u32 key_index) {
+const uint8_t *plain_json_get_key(plain_json_Context *context, uint32_t key_index) {
     return plain_json_list_get(&context->string_buffer, key_index);
 }
 
-const u8 *plain_json_get_string(plain_json_Context *context, u32 key_index) {
+const uint8_t *plain_json_get_string(plain_json_Context *context, uint32_t key_index) {
     return plain_json_list_get(&context->string_buffer, key_index);
 }
 
-const plain_json_Token *plain_json_get_token(plain_json_Context *context, u32 index) {
+const plain_json_Token *plain_json_get_token(plain_json_Context *context, uint32_t index) {
     return (plain_json_Token *)plain_json_list_get(&context->token_buffer, index);
 }
 
-u32 plain_json_get_token_count(plain_json_Context *context) {
+uint32_t plain_json_get_token_count(plain_json_Context *context) {
     return context->token_buffer.buffer_size / context->token_buffer.item_size;
 }
 
 bool plain_json_compute_position(
-    plain_json_Context *context, u32 offset, u32 *line, u32 *line_offset
+    plain_json_Context *context, uintptr_t offset, uint32_t *line, uint32_t *line_offset
 ) {
     if (offset >= context->buffer_size) {
         return false;
@@ -1019,7 +1014,7 @@ bool plain_json_compute_position(
 
     (*line) = 0;
     (*line_offset) = 0;
-    for (u32 i = 0; i < offset; i++) {
+    for (uintptr_t i = 0; i < offset; i++) {
         (*line_offset)++;
         if (context->buffer[i] == '\n') {
             (*line_offset) = 0;

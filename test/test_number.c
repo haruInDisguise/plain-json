@@ -9,7 +9,7 @@ SUIT(number, NULL, test_finalize);
         const char *text = #encoded;                                           \
         plain_json_ErrorType status = PLAIN_JSON_DONE;                         \
         context =                                          \
-            plain_json_parse(alloc_config, (u8 *)text, strlen(text), &status); \
+            plain_json_parse(alloc_config, (uint8_t *)text, strlen(text), &status); \
         test_assert_eq(status, result);                                        \
     }
 
