@@ -59,7 +59,7 @@ my_exe = executable(..., dependencies: [ plain_json_dep, ... ])
 
 ### Parsing/Deserialization
 
-> The API is documented in-source at [plain_json.h](/blob/main/plain-json/plain_json.h)
+> The API is documented in-source at [plain_json.h](plain-json/plain_json.h)
 
 ```c
 // While the library itself does not have any dependencies,
@@ -84,8 +84,8 @@ int main(void) {
 
     plain_json_ErrorType error_code = 0;
 
-    plain_json_Context *context = plain_json_parse(alloc_config, (const u8 *)text, strlen(text), &error_code);
-    const u32 token_count = plain_json_get_token_count(context);
+    plain_json_Context *context = plain_json_parse(alloc_config, (const uint8_t *)text, strlen(text), &error_code);
+    const uint32_t token_count = plain_json_get_token_count(context);
 
     if (error_code != PLAIN_JSON_DONE) {
         // If an error occured, the last token will be of type "PLAIN_JSON_ERROR"
@@ -93,7 +93,7 @@ int main(void) {
 
         // Figure out the readable type and offset file offset that contains the error.
         // The tokens offset field is guaranteed to represent a valid position.
-        u32 line = 0, line_offset = 0;
+        uint32_t line = 0, line_offset = 0;
         if(!plain_json_compute_position(context, error_token->start, &line, &line_offset)) {
             fprintf(stderr, "error: token start is out of bounds\n");
             goto on_error;
@@ -104,13 +104,13 @@ int main(void) {
         goto on_error;
     }
 
-    for (u32 i = 0; i < token_count; i++) {
+    for (uint32_t i = 0; i < token_count; i++) {
         const plain_json_Token *token = plain_json_get_token(context, i);
 
         if(token->key_index == PLAIN_JSON_NO_KEY)
             continue;
 
-        const u8 *key = plain_json_get_key(context, token->key_index);
+        const uint8_t *key = plain_json_get_key(context, token->key_index);
         if(strcmp((char*)key, "count") == 0) {
             printf("%s = %lld\n", key, token->value.integer);
         }
