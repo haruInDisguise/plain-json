@@ -1,21 +1,21 @@
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #ifndef _PLAIN_JSON_H_
-#define _PLAIN_JSON_H_
+    #define _PLAIN_JSON_H_
 
-#ifndef PLAIN_JSON_OPTION_MAX_DEPTH
-    #define PLAIN_JSON_OPTION_MAX_DEPTH 32
-#endif
+    #ifndef PLAIN_JSON_OPTION_MAX_DEPTH
+        #define PLAIN_JSON_OPTION_MAX_DEPTH 32
+    #endif
 
-#define PLAIN_JSON_STATE_IS_FIRST_TOKEN 0x01
-#define PLAIN_JSON_STATE_IS_ROOT         0x02
+    #define PLAIN_JSON_STATE_IS_FIRST_TOKEN 0x01
+    #define PLAIN_JSON_STATE_IS_ROOT        0x02
 
-#define PLAIN_JSON_STATE_NEEDS_KEY         0x04
-#define PLAIN_JSON_STATE_NEEDS_COMMA       0x08
-#define PLAIN_JSON_STATE_NEEDS_VALUE       0x10
-#define PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE 0x20
-#define PLAIN_JSON_STATE_NEEDS_COLON       0x40
+    #define PLAIN_JSON_STATE_NEEDS_KEY         0x04
+    #define PLAIN_JSON_STATE_NEEDS_COMMA       0x08
+    #define PLAIN_JSON_STATE_NEEDS_VALUE       0x10
+    #define PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE 0x20
+    #define PLAIN_JSON_STATE_NEEDS_COLON       0x40
 
 /// If the error_code is not equal to PLAIN_JSON_DONE, the parser encountered an issue.
 /// "plain-json" tries to be explicit when it comes to error handeling, meaning most
@@ -77,8 +77,8 @@ typedef enum {
     PLAIN_JSON_TYPE_FLOAT64,
 } plain_json_Type;
 
-#define PLAIN_JSON_NO_KEY (-1U)
-#define PLAIN_JSON_NULL   (void *)0
+    #define PLAIN_JSON_NO_KEY (-1U)
+    #define PLAIN_JSON_NULL   (void *)0
 
 /// A tokens fields describe its layout. All fields can (and should) be
 /// accessed directly. The library only hands out const references that
@@ -118,8 +118,8 @@ typedef struct plain_json_Context plain_json_Context;
 /// argument that should be initialized to "PLAIN_JSON_NONE".
 /// Check the last token to track down the errors exact position.
 extern plain_json_Context *plain_json_parse(
-    plain_json_AllocatorConfig alloc_config, const uint8_t *buffer,
-    uintptr_t buffer_size, plain_json_ErrorType *error
+    plain_json_AllocatorConfig alloc_config, const uint8_t *buffer, uintptr_t buffer_size,
+    plain_json_ErrorType *error
 );
 /// Release the internal state, after processing the parsing results.
 extern void plain_json_free(plain_json_Context *context);
@@ -141,7 +141,9 @@ extern const uint8_t *plain_json_get_string(plain_json_Context *context, uint32_
 /// Requires a "line" and "line_offset" argument to store the result.
 /// Returns false if the offset is beyond the raw jsons size.
 /// This function is useful to track down the exact position of an error token.
-extern bool plain_json_compute_position(plain_json_Context *context, uintptr_t offset, uint32_t *line, uint32_t *line_offset);
+extern bool plain_json_compute_position(
+    plain_json_Context *context, uintptr_t offset, uint32_t *line, uint32_t *line_offset
+);
 /// Turn an error code into its string representation.
 extern const char *plain_json_error_to_string(plain_json_ErrorType type);
 /// Turn a type into its string representation.
@@ -172,6 +174,8 @@ extern const char *plain_json_type_to_string(plain_json_Type type);
 #define is_blank(c) (c == ' ' || c == '\t' || c == '\n' || c == '\r')
 #define is_digit(c) (c >= '0' && c <= '9')
 #define is_hex(c)   ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (is_digit(c)))
+
+#define PLAIN_JSON_INTERN_STRING_CACHE 64
 
 typedef struct {
     uint8_t *buffer;
@@ -243,8 +247,9 @@ static inline uint8_t plain_json_intern_peek(plain_json_Context *context, uintpt
 
 /* Parsing */
 
-static inline bool
-plain_json_intern_parse_utf16(const uint8_t *buffer, const uintptr_t buffer_size, uint32_t *codepoint) {
+static inline bool plain_json_intern_parse_utf16(
+    const uint8_t *buffer, const uintptr_t buffer_size, uint32_t *codepoint
+) {
     if (4 >= buffer_size) {
         return false;
     }
@@ -265,12 +270,41 @@ plain_json_intern_parse_utf16(const uint8_t *buffer, const uintptr_t buffer_size
     return true;
 }
 
-#define PLAIN_JSON_INTERN_STRING_CACHE 64
-static plain_json_ErrorType plain_json_intern_read_string(plain_json_Context *context) {
-    static const uint32_t surrogate_mask = 0x0000FC00;
-    static const uint32_t high_surrogate_layout = 0x0000D800;
-    static const uint32_t low_surrogate_layout = 0x0000DC00;
+static inline bool
+plain_json_intern_encode_utf8(uint32_t codepoint, uint8_t *cache, uint32_t *cache_offset_ptr) {
+    uint32_t cache_offset = *cache_offset_ptr;
+    uint32_t part = 0;
 
+    if (codepoint <= 0x07FF) {
+        part = codepoint;
+        cache[cache_offset] = 0xC0 | ((part >> 6) & 0x1F);
+        cache[cache_offset + 1] = 0x80 | (part & 0x3F);
+        cache_offset += 2;
+    } else if (codepoint <= 0xFFFF) {
+        part = codepoint;
+        cache[cache_offset] = 0xE0 | ((part >> 12) & 0x0F);
+        cache[cache_offset + 1] = 0x80 | ((part >> 6) & 0x3F);
+        cache[cache_offset + 2] = 0x80 | (part & 0x3F);
+        cache_offset += 3;
+    } else if (codepoint <= 0x10FFFF) {
+        part = codepoint;
+        cache[cache_offset] = 0xF0 | ((part >> 18) & 0x07);
+        cache[cache_offset + 1] = 0x80 | ((part >> 12) & 0x3F);
+        cache[cache_offset + 2] = 0x80 | ((part >> 6) & 0x3F);
+        cache[cache_offset + 3] = 0x80 | (part & 0x3F);
+        cache_offset += 4;
+    } else {
+        return false;
+    }
+
+    (*cache_offset_ptr) = cache_offset;
+    return true;
+}
+
+static inline plain_json_ErrorType plain_json_intern_read_utf8(
+    const uint8_t *buffer, uintptr_t buffer_size, uintptr_t *offset_ptr, uint8_t *cache,
+    uint32_t *cache_offset_ptr, plain_json_ErrorType *status
+) {
     static const uint32_t utf8_surrogate_mask = 0x0F200000;
     static const uint32_t utf8_surrogate_layout = 0x0D200000;
     static const uint32_t seq4_range_mask = 0x07300000;
@@ -305,6 +339,171 @@ static plain_json_ErrorType plain_json_intern_read_string(plain_json_Context *co
         4,                      /* 1111 or invalid */
     };
 
+    uintptr_t offset = *offset_ptr;
+    uint32_t cache_offset = *cache_offset_ptr;
+
+    uint8_t current_char = buffer[offset];
+
+    /* Read UTF-8 */
+    uint8_t seq_length = length_table[current_char >> 4];
+    uint32_t value = 0;
+
+    if (offset + seq_length >= buffer_size) {
+        (*status) = PLAIN_JSON_ERROR_STRING_UTF8_INVALID;
+        return false;
+    }
+
+    switch (seq_length) {
+    case 4:
+        value |= (uint32_t)buffer[offset + 3] & 0xff;
+        cache[cache_offset + 3] = buffer[offset + 3];
+        /* fallthrough */
+    case 3:
+        value |= ((uint32_t)buffer[offset + 2] & 0xff) << 8;
+        cache[cache_offset + 2] = buffer[offset + 2];
+        /* fallthrough */
+    case 2:
+        value |= ((uint32_t)buffer[offset + 1] & 0xff) << 16;
+        cache[cache_offset + 1] = buffer[offset + 1];
+        /* fallthrough */
+    case 1:
+        value |= ((uint32_t)current_char & 0xff) << 24;
+        cache[cache_offset] = buffer[offset];
+        break;
+    default:
+        /* unreachable */
+        json_assert(false);
+    }
+
+    if (((value & header_mask[seq_length - 1]) != header_layout[seq_length - 1]) ||
+        (value & range_mask[seq_length - 1]) == 0) {
+        (*status) = PLAIN_JSON_ERROR_STRING_UTF8_INVALID;
+        return false;
+    }
+
+    /* Encoded surrogate pairs are not legal utf-8 */
+    if ((value & utf8_surrogate_mask) == utf8_surrogate_layout) {
+        (*status) = PLAIN_JSON_ERROR_STRING_UTF8_HAS_SURROGATE;
+        return false;
+    }
+
+    if (seq_length == 4 && (value & seq4_range_mask) > seq4_pattern_mask) {
+        (*status) = PLAIN_JSON_ERROR_STRING_UTF8_INVALID;
+        return false;
+    }
+
+    (*offset_ptr) = offset + seq_length;
+    (*cache_offset_ptr) = cache_offset + seq_length;
+
+    return PLAIN_JSON_DONE;
+}
+
+static inline plain_json_ErrorType plain_json_intern_read_escape(
+    const uint8_t *buffer, uintptr_t buffer_size, uintptr_t *offset_ptr, uint8_t *cache,
+    uint32_t *cache_offset_ptr, plain_json_ErrorType *status
+) {
+    static const uint32_t surrogate_mask = 0x0000FC00;
+    static const uint32_t high_surrogate_layout = 0x0000D800;
+    static const uint32_t low_surrogate_layout = 0x0000DC00;
+
+    uintptr_t offset = *offset_ptr;
+    uint32_t cache_offset = *cache_offset_ptr;
+
+    uint8_t current_char = buffer[++offset];
+
+    /* At this point, we will always read at least two characters. */
+    offset++;
+    switch (current_char) {
+    case '\\':
+        cache[cache_offset] = '\\';
+        break;
+    case '\"':
+        cache[cache_offset] = '"';
+        break;
+    case '/':
+        cache[cache_offset] = '/';
+        break;
+    case 'b':
+        cache[cache_offset] = '\b';
+        break;
+    case 'f':
+        cache[cache_offset] = '\f';
+        break;
+    case 'n':
+        cache[cache_offset] = '\n';
+        break;
+    case 'r':
+        cache[cache_offset] = '\r';
+        break;
+    case 't':
+        cache[cache_offset] = '\t';
+        break;
+    case 'u':;
+        /* Parse UTF-16 */
+        uint32_t codepoint = 0;
+        if (offset + 4 >= buffer_size ||
+            !plain_json_intern_parse_utf16(buffer + offset, buffer_size - offset, &codepoint)) {
+            /* Error: Codepoint is invalid */
+            (*status) = PLAIN_JSON_ERROR_STRING_UTF16_INVALID;
+            return false;
+        }
+        offset += 4;
+
+        if ((codepoint & surrogate_mask) == low_surrogate_layout) {
+            /* Error: Unexpected low surrogate */
+            (*status) = PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE;
+            return false;
+        }
+
+        if ((codepoint & surrogate_mask) == high_surrogate_layout) {
+            /* Read low surrogate */
+            if (offset + 2 >= buffer_size || buffer[offset] != '\\' || buffer[offset + 1] != 'u') {
+                /* Error: Second codepoint missing */
+                (*status) = PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE;
+                return false;
+            }
+            offset += 2;
+
+            uint32_t high_surrogate = codepoint;
+            codepoint = 0;
+            if (offset + 4 >= buffer_size ||
+                !plain_json_intern_parse_utf16(buffer + offset, buffer_size - offset, &codepoint)) {
+                /* Error: Second codepoint is invalid */
+                (*status) = PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE;
+                return false;
+            }
+
+            offset += 4;
+            if ((codepoint & surrogate_mask) != low_surrogate_layout) {
+                /* Error: Second codepoint is not a valid lower surrogate half */
+                (*status) = PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE;
+                return false;
+            }
+
+            uint32_t low_surrogate = codepoint;
+            codepoint = ((high_surrogate & 0x3FF) << 10) | (low_surrogate & 0x3FF);
+            codepoint += 0x10000;
+        }
+
+        if (!plain_json_intern_encode_utf8(codepoint, cache, &cache_offset)) {
+            (*status) = PLAIN_JSON_ERROR_STRING_UTF16_INVALID;
+            return false;
+        }
+
+        break;
+
+    default:
+        (*status) = PLAIN_JSON_ERROR_STRING_INVALID_ESCAPE;
+        return false;
+    }
+
+    (*offset_ptr) = offset;
+    (*cache_offset_ptr) = cache_offset;
+
+    return PLAIN_JSON_DONE;
+}
+
+static plain_json_ErrorType plain_json_intern_read_string(plain_json_Context *context) {
     const uint8_t *buffer = context->buffer + context->buffer_offset;
     const uintptr_t buffer_size = context->buffer_size - context->buffer_offset;
 
@@ -317,7 +516,7 @@ static plain_json_ErrorType plain_json_intern_read_string(plain_json_Context *co
     while (offset < buffer_size) {
         current_char = buffer[offset];
 
-        /* Commit the cache and reserve 4 bytes for supplementary unicode characters + '\0' */
+        /* Commit the cache and reserve 5 bytes for potential unicode characters + '\0' */
         if (cache_offset + 5 >= PLAIN_JSON_INTERN_STRING_CACHE || current_char == '\"') {
             if (!plain_json_intern_list_append(
                     &context->string_buffer, &context->alloc_config, cache,
@@ -330,11 +529,23 @@ static plain_json_ErrorType plain_json_intern_read_string(plain_json_Context *co
         }
 
         if (current_char == '\"') {
-            goto done;
+            break;
         }
 
+        /* Read escapes */
         if (current_char == '\\') {
-            goto read_escape;
+            if (offset + 1 >= buffer_size) {
+                return PLAIN_JSON_ERROR_STRING_UNTERMINATED;
+            }
+
+            plain_json_ErrorType status = PLAIN_JSON_DONE;
+            if (!plain_json_intern_read_escape(
+                    buffer, buffer_size, &offset, cache, &cache_offset, &status
+                )) {
+                return status;
+            }
+
+            continue;
         }
 
         if (current_char == '\0' || current_char == '\n') {
@@ -353,169 +564,18 @@ static plain_json_ErrorType plain_json_intern_read_string(plain_json_Context *co
             continue;
         }
 
-        /* Read UTF-8 */
-        uint8_t seq_length = length_table[current_char >> 4];
-        uint32_t value = 0;
-
-        if (offset + seq_length >= buffer_size) {
-            return PLAIN_JSON_ERROR_STRING_UTF8_INVALID;
+        plain_json_ErrorType status = PLAIN_JSON_DONE;
+        if (!plain_json_intern_read_utf8(
+                buffer, buffer_size, &offset, cache, &cache_offset, &status
+            )) {
+            return status;
         }
-
-        switch (seq_length) {
-        case 4:
-            value |= (uint32_t)buffer[offset + 3] & 0xff;
-            cache[cache_offset + 3] = buffer[offset + 3];
-            /* fallthrough */
-        case 3:
-            value |= ((uint32_t)buffer[offset + 2] & 0xff) << 8;
-            cache[cache_offset + 2] = buffer[offset + 2];
-            /* fallthrough */
-        case 2:
-            value |= ((uint32_t)buffer[offset + 1] & 0xff) << 16;
-            cache[cache_offset + 1] = buffer[offset + 1];
-            /* fallthrough */
-        case 1:
-            value |= ((uint32_t)current_char & 0xff) << 24;
-            cache[cache_offset] = buffer[offset];
-            break;
-        default:
-            /* unreachable */
-            json_assert(false);
-        }
-
-        if (((value & header_mask[seq_length - 1]) != header_layout[seq_length - 1]) ||
-            (value & range_mask[seq_length - 1]) == 0) {
-            return PLAIN_JSON_ERROR_STRING_UTF8_INVALID;
-        }
-
-        /* Encoded surrogate pairs are not legal utf-8 */
-        if ((value & utf8_surrogate_mask) == utf8_surrogate_layout) {
-            return PLAIN_JSON_ERROR_STRING_UTF8_HAS_SURROGATE;
-        }
-
-        if (seq_length == 4 && (value & seq4_range_mask) > seq4_pattern_mask) {
-            return PLAIN_JSON_ERROR_STRING_UTF8_INVALID;
-        }
-
-        offset += seq_length;
-        cache_offset += seq_length;
-        continue;
-
-    read_escape:
-        if (offset + 1 >= buffer_size) {
-            break;
-        }
-
-        current_char = buffer[++offset];
-        switch (current_char) {
-        case '\\':
-            cache[cache_offset] = '\\';
-            break;
-        case '\"':
-            cache[cache_offset] = '"';
-            break;
-        case '/':
-            cache[cache_offset] = '/';
-            break;
-        case 'b':
-            cache[cache_offset] = '\b';
-            break;
-        case 'f':
-            cache[cache_offset] = '\f';
-            break;
-        case 'n':
-            cache[cache_offset] = '\n';
-            break;
-        case 'r':
-            cache[cache_offset] = '\r';
-            break;
-        case 't':
-            cache[cache_offset] = '\t';
-            break;
-        case 'u':
-            offset++;
-
-            /* Parse UTF-16 */
-            uint32_t codepoint = 0;
-            if (offset + 4 >= buffer_size ||
-                !plain_json_intern_parse_utf16(buffer + offset, buffer_size - offset, &codepoint)) {
-                /* Error: Codepoint is invalid */
-                return PLAIN_JSON_ERROR_STRING_UTF16_INVALID;
-            }
-            offset += 4;
-
-            if ((codepoint & surrogate_mask) == low_surrogate_layout) {
-                /* Error: Unexpected low surrogate */
-                return PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE;
-            }
-
-            if ((codepoint & surrogate_mask) == high_surrogate_layout) {
-                /* Read low surrogate */
-                if (offset + 2 >= buffer_size || buffer[offset] != '\\' ||
-                    buffer[offset + 1] != 'u') {
-                    /* Error: Second codepoint missing */
-                    return PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE;
-                }
-                offset += 2;
-
-                uint32_t high_surrogate = codepoint;
-                codepoint = 0;
-                if (offset + 4 >= buffer_size ||
-                    !plain_json_intern_parse_utf16(
-                        buffer + offset, buffer_size - offset, &codepoint
-                    )) {
-                    /* Error: Second codepoint is invalid */
-                    return PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE;
-                }
-
-                offset += 4;
-                if ((codepoint & surrogate_mask) != low_surrogate_layout) {
-                    /* Error: Second codepoint is not a valid lower surrogate half */
-                    return PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE;
-                }
-
-                uint32_t low_surrogate = codepoint;
-                codepoint = ((high_surrogate & 0x3FF) << 10) | (low_surrogate & 0x3FF);
-                codepoint += 0x10000;
-            }
-
-            /* Encode as UTF-8 */
-            uint32_t part = 0;
-            if (codepoint <= 0x07FF) {
-                part = codepoint;
-                cache[cache_offset] = 0xC0 | ((part >> 6) & 0x1F);
-                cache[cache_offset + 1] = 0x80 | (part & 0x3F);
-                cache_offset += 2;
-            } else if (codepoint <= 0xFFFF) {
-                part = codepoint;
-                cache[cache_offset] = 0xE0 | ((part >> 12) & 0x0F);
-                cache[cache_offset + 1] = 0x80 | ((part >> 6) & 0x3F);
-                cache[cache_offset + 2] = 0x80 | (part & 0x3F);
-                cache_offset += 3;
-            } else if (codepoint <= 0x10FFFF) {
-                part = codepoint;
-                cache[cache_offset] = 0xF0 | ((part >> 18) & 0x07);
-                cache[cache_offset + 1] = 0x80 | ((part >> 12) & 0x3F);
-                cache[cache_offset + 2] = 0x80 | ((part >> 6) & 0x3F);
-                cache[cache_offset + 3] = 0x80 | (part & 0x3F);
-                cache_offset += 4;
-            } else {
-                return PLAIN_JSON_ERROR_STRING_UTF16_INVALID;
-            }
-
-            continue;
-
-        default:
-            return PLAIN_JSON_ERROR_STRING_INVALID_ESCAPE;
-        }
-
-        offset++;
-        cache_offset++;
     }
 
-    return PLAIN_JSON_ERROR_STRING_UNTERMINATED;
+    if (offset >= buffer_size) {
+        return PLAIN_JSON_ERROR_STRING_UNTERMINATED;
+    }
 
-done:
     plain_json_intern_consume(context, offset + 1);
     return PLAIN_JSON_HAS_REMAINING;
 }
@@ -601,16 +661,19 @@ plain_json_intern_read_number(plain_json_Context *context, plain_json_Token *tok
             if (status == READ_INT) {
                 /* Check for over/underflow */
 
-                // FIXME: Depending on the wordsize, the int_max value might end in different digits (ie. i32 => '8', i64 => '7').
-                if(!int_has_sign) {
-                    if(int_value > (int_max / 10) || (int_value == (int_max / 10) && buffer[offset] > '7')) {
+                // FIXME: Depending on the wordsize, the int_max value might end in different digits
+                // (ie. i32 => '8', i64 => '7').
+                if (!int_has_sign) {
+                    if (int_value > (int_max / 10) ||
+                        (int_value == (int_max / 10) && buffer[offset] > '7')) {
                         return PLAIN_JSON_ERROR_NUMBER_OVERFLOW;
                     }
 
                     int_value *= 10;
                     int_value += buffer[offset] - '0';
                 } else {
-                    if(int_value < (int_max / 10) * -1 || (int_value == (int_max / 10) * -1 && buffer[offset] > '8')) {
+                    if (int_value < (int_max / 10) * -1 ||
+                        (int_value == (int_max / 10) * -1 && buffer[offset] > '8')) {
                         return PLAIN_JSON_ERROR_NUMBER_UNDERFLOW;
                     }
 
@@ -629,9 +692,11 @@ plain_json_intern_read_number(plain_json_Context *context, plain_json_Token *tok
                 }
             }
 
-            if(status == READ_EXPO) {
-                /* TODO: Make sure the resulting number (int/float * expo) can fit into the wordsize */
-                if(expo_value > (int_max / 10) || (int_value == (int_max / 10) && buffer[offset] > '7')) {
+            if (status == READ_EXPO) {
+                /* TODO: Make sure the resulting number (int/float * expo) can fit into the wordsize
+                 */
+                if (expo_value > (int_max / 10) ||
+                    (int_value == (int_max / 10) && buffer[offset] > '7')) {
                     return PLAIN_JSON_ERROR_NUMBER_OVERFLOW;
                 }
 
@@ -683,6 +748,7 @@ plain_json_intern_read_number(plain_json_Context *context, plain_json_Token *tok
 
             status = READ_EXPO;
             break;
+
         default:
             goto done;
         }
@@ -927,8 +993,8 @@ plain_json_intern_read_token(plain_json_Context *context, plain_json_Token *toke
 }
 
 plain_json_Context *plain_json_parse(
-    plain_json_AllocatorConfig alloc_config, const uint8_t *buffer,
-    uintptr_t buffer_size, plain_json_ErrorType *error
+    plain_json_AllocatorConfig alloc_config, const uint8_t *buffer, uintptr_t buffer_size,
+    plain_json_ErrorType *error
 ) {
     plain_json_Context *context = alloc_config.alloc_func(sizeof(*context));
     plain_json_intern_memset(context, 0, sizeof(*context));
@@ -981,8 +1047,8 @@ void plain_json_free(plain_json_Context *context) {
     context->alloc_config.free_func(context);
 }
 
-static const  uint8_t *plain_json_list_get(plain_json_List *list, uint32_t index) {
-    if(index >= list->buffer_size / list->item_size) {
+static const uint8_t *plain_json_list_get(plain_json_List *list, uint32_t index) {
+    if (index >= list->buffer_size / list->item_size) {
         return PLAIN_JSON_NULL;
     }
 
@@ -1113,15 +1179,15 @@ const char *plain_json_error_to_string(plain_json_ErrorType type) {
     return "unknown_error";
 }
 
-#undef check_for_comma
-#undef verify_state
-#undef has_state
-#undef push_state
-#undef pop_state
+    #undef check_for_comma
+    #undef verify_state
+    #undef has_state
+    #undef push_state
+    #undef pop_state
 
-#undef is_hex
-#undef is_blank
-#undef is_digit
-#undef json_assert
+    #undef is_hex
+    #undef is_blank
+    #undef is_digit
+    #undef json_assert
 
 #endif
