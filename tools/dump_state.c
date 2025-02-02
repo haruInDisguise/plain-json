@@ -11,6 +11,15 @@
 #define PLAIN_JSON_IMPLEMENTATION
 #include <plain_json.h>
 
+#define PLAIN_JSON_STATE_IS_FIRST_TOKEN 0x01
+#define PLAIN_JSON_STATE_IS_ROOT        0x02
+
+#define PLAIN_JSON_STATE_NEEDS_KEY         0x04
+#define PLAIN_JSON_STATE_NEEDS_COMMA       0x08
+#define PLAIN_JSON_STATE_NEEDS_VALUE       0x10
+#define PLAIN_JSON_STATE_NEEDS_ARRAY_VALUE 0x20
+#define PLAIN_JSON_STATE_NEEDS_COLON       0x40
+
 static void print_error(plain_json_Context *context, uintptr_t position, plain_json_ErrorType type) {
     uint32_t line = 0, offset = 0;
     plain_json_compute_position(context, position, &line, &offset);
@@ -96,11 +105,27 @@ static void dump(plain_json_Context *context, const plain_json_Token *token, uin
     printf("%s\n", buffer);
 }
 
+static void custom_free(void *context, void *buffer) {
+    (void)context;
+    free(buffer);
+}
+
+static void *custom_alloc(void *context, uintptr_t size) {
+    (void) context;
+    return malloc(size);
+}
+
+static void *custom_realloc(void *context, void *buffer, uintptr_t old_size, uintptr_t new_size) {
+    (void)context;
+    (void)old_size;
+    return realloc(buffer, new_size);
+}
+
 int parse_json(uint8_t *buffer, unsigned long long buffer_size) {
     plain_json_ErrorType result = PLAIN_JSON_HAS_REMAINING;
-    plain_json_AllocatorConfig alloc_config = { .free_func = free,
-                                                .alloc_func = malloc,
-                                                .realloc_func = realloc };
+    plain_json_AllocatorConfig alloc_config = { .free_func = custom_free,
+                                                .alloc_func = custom_alloc,
+                                                .realloc_func = custom_realloc };
     plain_json_Context *context =
         plain_json_parse(alloc_config, (uint8_t *)buffer, buffer_size, &result);
 

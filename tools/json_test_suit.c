@@ -27,21 +27,26 @@ const TestCase test_parsing_cases[] = {
     { "i_number_very_big_negative_int.json", PLAIN_JSON_ERROR_NUMBER_UNDERFLOW },
 
     { "i_object_key_lone_2nd_surrogate.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE },
-    { "i_string_1st_surrogate_but_2nd_missing.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE },
-    { "i_string_1st_valid_surrogate_2nd_invalid.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE },
-    { "i_string_UTF-16LE_with_BOM.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE},
+    { "i_string_1st_surrogate_but_2nd_missing.json",
+      PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE },
+    { "i_string_1st_valid_surrogate_2nd_invalid.json",
+      PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE },
+    { "i_string_UTF-16LE_with_BOM.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE },
     { "i_string_UTF-8_invalid_sequence.json", PLAIN_JSON_ERROR_STRING_UTF8_INVALID },
     { "i_string_UTF8_surrogate_U+D800.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE },
 
-    { "i_string_incomplete_surrogate_and_escape_valid.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE},
-    { "i_string_incomplete_surrogate_pair.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE},
-    { "i_string_incomplete_surrogates_escape_valid.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE},
-    { "i_string_invalid_lonely_surrogate.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE},
-    { "i_string_invalid_surrogate.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE},
+    { "i_string_incomplete_surrogate_and_escape_valid.json",
+      PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE },
+    { "i_string_incomplete_surrogate_pair.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE },
+    { "i_string_incomplete_surrogates_escape_valid.json",
+      PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE },
+    { "i_string_invalid_lonely_surrogate.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE },
+    { "i_string_invalid_surrogate.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE },
     { "i_string_invalid_utf-8.json", PLAIN_JSON_ERROR_STRING_UTF8_INVALID },
-    { "i_string_inverted_surrogates_U+1D11E.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE},
+    { "i_string_inverted_surrogates_U+1D11E.json",
+      PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE },
     { "i_string_iso_latin_1.json", PLAIN_JSON_ERROR_STRING_UTF8_INVALID },
-    { "i_string_lone_second_surrogate.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE},
+    { "i_string_lone_second_surrogate.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE },
     { "i_string_lone_utf8_continuation_byte.json", PLAIN_JSON_ERROR_STRING_UTF8_INVALID },
     { "i_string_not_in_unicode_range.json", PLAIN_JSON_ERROR_STRING_UTF8_INVALID },
     { "i_string_overlong_sequence_2_bytes.json", PLAIN_JSON_ERROR_STRING_UTF8_INVALID },
@@ -166,10 +171,11 @@ const TestCase test_parsing_cases[] = {
     { "n_object_with_trailing_garbage.json", PLAIN_JSON_ERROR_ILLEGAL_CHAR },
     { "n_single_space.json", PLAIN_JSON_ERROR_UNEXPECTED_EOF },
 
-    { "n_string_1_surrogate_then_escape.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE},
-    { "n_string_1_surrogate_then_escape_u.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE},
-    { "n_string_1_surrogate_then_escape_u1.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE},
-    { "n_string_1_surrogate_then_escape_u1x.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE},
+    { "n_string_1_surrogate_then_escape.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE },
+    { "n_string_1_surrogate_then_escape_u.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE },
+    { "n_string_1_surrogate_then_escape_u1.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE },
+    { "n_string_1_surrogate_then_escape_u1x.json",
+      PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE },
 
     { "n_string_accentuated_char_no_quotes.json", PLAIN_JSON_ERROR_ILLEGAL_CHAR },
     { "n_string_backslash_00.json", PLAIN_JSON_ERROR_STRING_INVALID_ESCAPE },
@@ -180,7 +186,8 @@ const TestCase test_parsing_cases[] = {
     { "n_string_incomplete_escape.json", PLAIN_JSON_ERROR_STRING_UNTERMINATED },
     { "n_string_incomplete_escaped_character.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID },
     { "n_string_incomplete_surrogate.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE },
-    { "n_string_incomplete_surrogate_escape_invalid.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE },
+    { "n_string_incomplete_surrogate_escape_invalid.json",
+      PLAIN_JSON_ERROR_STRING_UTF16_INVALID_SURROGATE },
     { "n_string_invalid-utf-8-in-escape.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID },
     { "n_string_invalid_backslash_esc.json", PLAIN_JSON_ERROR_STRING_INVALID_ESCAPE },
     { "n_string_invalid_unicode_escape.json", PLAIN_JSON_ERROR_STRING_UTF16_INVALID },
@@ -347,14 +354,31 @@ const TestCase test_parsing_cases[] = {
 #define ANSI_DIM   "\x1b[2m"
 #define ANSI_RESET "\x1b[0m"
 
-#define ANSI_RED     "\x1b[31m"
-#define ANSI_GREEN   "\x1b[32m"
-#define ANSI_YELLOW  "\x1b[33m"
-#define ANSI_BLUE    "\x1b[34m"
-#define ANSI_CYAN    "\x1b[36m"
+#define ANSI_RED    "\x1b[31m"
+#define ANSI_GREEN  "\x1b[32m"
+#define ANSI_YELLOW "\x1b[33m"
+#define ANSI_BLUE   "\x1b[34m"
+#define ANSI_CYAN   "\x1b[36m"
 
 #define PATH_BUFFER_SIZE  256
 #define TOKEN_BUFFER_SIZE 64
+
+static void custom_free(void *context, void *buffer) {
+    (void)context;
+    free(buffer);
+}
+
+static void *custom_alloc(void *context, uintptr_t size) {
+    (void)context;
+    return malloc(size);
+}
+
+static void *custom_realloc(void *context, void *buffer, uintptr_t old_size, uintptr_t new_size) {
+    (void)context;
+    (void)old_size;
+    return realloc(buffer, new_size);
+}
+
 int main(void) {
     const char *path = "data/JSONTestSuite/test_parsing/";
     char pathname[PATH_BUFFER_SIZE] = { 0 };
@@ -387,12 +411,14 @@ int main(void) {
         }
 
         plain_json_ErrorType result = PLAIN_JSON_HAS_REMAINING;
+
         plain_json_AllocatorConfig alloc_config = {
-            .free_func = free,
-            .alloc_func = malloc,
-            .realloc_func = realloc
+            .alloc_func = custom_alloc,
+            .free_func = custom_free,
+            .realloc_func = custom_realloc,
         };
-        plain_json_Context *context = plain_json_parse(alloc_config, (uint8_t*)text_buffer, text_size, &result);
+        plain_json_Context *context =
+            plain_json_parse(alloc_config, (uint8_t *)text_buffer, text_size, &result);
 
         int passed = 0;
         int report_string_index = 0;
